@@ -1,3 +1,6 @@
 [submodule "cpp/libcxxwrap-julia"]
 	path = cpp/libcxxwrap-julia
 	url = https://github.com/JuliaInterop/libcxxwrap-julia.git
+[submodule "cpp/pypowsybl"]
+	path = cpp/pypowsybl
+	url = https://github.com/powsybl/pypowsybl.git

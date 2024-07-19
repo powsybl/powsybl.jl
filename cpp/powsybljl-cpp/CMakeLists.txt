@@ -18,8 +18,6 @@ set(CMAKE_FIND_PACKAGE_PREFER_CONFIG TRUE)
 set(CXXWRAP_INCLUDE_DIR "../libcxxwrap-julia/include")
 set(POWSYBL_CPP_INCLUDE_DIR ${POWSYBL_INSTALL_DIR}/include/powsybl-cpp)
 
-message(>>${POWSYBL_CPP_INCLUDE_DIR})
-
 include_directories(${CXXWRAP_INCLUDE_DIR} ${Julia_INCLUDE_DIRS} ${POWSYBL_CPP_INCLUDE_DIR})
 link_directories(${POWSYBL_INSTALL_DIR}/lib)
 

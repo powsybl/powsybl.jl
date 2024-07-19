@@ -15,10 +15,10 @@ set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${JlCxx_location}")
 message(STATUS "Found JlCxx at ${JlCxx_location}")
 set(CMAKE_FIND_PACKAGE_PREFER_CONFIG TRUE)
 
-set(CXXWRAP_INCLUDE_DIR "../libcxxwrap-julia/include")
+#set(CXXWRAP_INCLUDE_DIR "../libcxxwrap-julia/include")
 set(POWSYBL_CPP_INCLUDE_DIR ${POWSYBL_INSTALL_DIR}/include/powsybl-cpp)
 
-include_directories(${CXXWRAP_INCLUDE_DIR} ${Julia_INCLUDE_DIRS} ${POWSYBL_CPP_INCLUDE_DIR})
+include_directories(${Julia_INCLUDE_DIRS} ${POWSYBL_CPP_INCLUDE_DIR})
 link_directories(${POWSYBL_INSTALL_DIR}/lib)
 
 add_library(PowsyblJlWrap SHARED powsybl_jl.cpp)

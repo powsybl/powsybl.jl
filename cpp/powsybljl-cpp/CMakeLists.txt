@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(PowsyblJlWrap)
 
-set(CMAKE_CXX_STANDARD 17)
-
 set(CMAKE_MACOSX_RPATH 1)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
@@ -14,6 +12,8 @@ get_filename_component(JlCxx_location ${JlCxx_location} DIRECTORY)
 set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${JlCxx_location}")
 message(STATUS "Found JlCxx at ${JlCxx_location}")
 set(CMAKE_FIND_PACKAGE_PREFER_CONFIG TRUE)
+
+set(CMAKE_CXX_STANDARD 17)
 
 #set(CXXWRAP_INCLUDE_DIR "../libcxxwrap-julia/include")
 set(POWSYBL_CPP_INCLUDE_DIR ${POWSYBL_INSTALL_DIR}/include/powsybl-cpp)

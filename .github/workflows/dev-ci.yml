@@ -35,7 +35,7 @@ jobs:
 
       - name: Build and install Powsybl_jll
         run: |
-          julia build_local.jl --verbose   
+          julia build_local.jl --verbose --deploy="local" 
 
       - name: Install Powsybl package
         run: |

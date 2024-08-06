@@ -1,2 +1,2 @@
 using Powsybl
-print(Powsybl.get_version_table())
+@info Powsybl.get_version_table()

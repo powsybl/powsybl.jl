@@ -1,0 +1,18 @@
+name = "Powsybl"
+uuid = "cc5d7637-2d3a-48eb-b6d4-9415154f8200"
+authors = ["Bertrand Rix"]
+version = "0.1"
+
+[deps]
+CxxWrap = "1f15a43c-97ca-5a2a-ae31-89f07a497df4"
+Powsybl_jll = "b8c81e45-bfcc-5af0-87df-fd7619bc5515"
+
+[compat]
+julia = "1.6.7"
+CxxWrap = "0.16.0"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

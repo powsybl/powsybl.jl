@@ -14,7 +14,6 @@ jobs:
     strategy:
       matrix:
         version:
-          - '1.9'
           - '1' # Leave this line unchanged. '1' will automatically expand to the latest stable 1.x release of Julia.
         os:
           - ubuntu-latest
@@ -30,10 +29,18 @@ jobs:
         with:
           version: '1.10'
 
-      - name: Build
+      - name: Install requirements
         run: |
-          julia -e '
-          import Pkg
-          Pkg.add("BinaryBuilder")
-          Pkg.add("CxxWrap")'
+          julia install_requirements.jl   
+
+      - name: Build and install Powsybl_jll
+        run: |
           julia build_local.jl --verbose   
+
+      - name: Install Powsybl package
+        run: |
+          eval "julia -e 'using Pkg; Pkg.REPLMode.PRINTED_REPL_WARNING[] = true; pkg\"dev .\"'"
+
+      - name: Test
+        run: |
+          julia test/print_version.jl

@@ -32,4 +32,8 @@ jobs:
 
       - name: Build
         run: |
+          julia -e '
+          import Pkg
+          Pkg.add("BinaryBuilder")
+          Pkg.add("CxxWrap")'
           julia build_local.jl --verbose   

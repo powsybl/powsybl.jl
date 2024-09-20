@@ -11,7 +11,17 @@ module Network
   end
 
   function get_elements(network::NetworkHandle, type::Powsybl.ElementType, all_attributes::Bool = false, attributes::Vector{String} = Vector{String}())
-    series_array = Powsybl.create_network_elements_series_array(network.handle, type, StdVector{StdString}(attributes), Powsybl.ALL_ATTRIBUTES, per_unit, nominal_apparent_power)
+    filter_attributes = Powsybl.DEFAULT_ATTRIBUTES
+    if all_attributes
+      filter_attributes = Powsybl.ALL_ATTRIBUTES
+    elseif !isempty(attributes)
+      filter_attributes = Powsybl.SELECTION_ATTRIBUTES
+    end
+
+    if all_attributes && !isempty(attributes)
+      throw("parameters \"all_attributes\" and \"attributes\" are mutually exclusive")
+    end
+    series_array = Powsybl.create_network_elements_series_array(network.handle, type, StdVector{StdString}(attributes), filter_attributes, per_unit, nominal_apparent_power)
     return create_dataframe_from_series_array(series_array[])
   end
 

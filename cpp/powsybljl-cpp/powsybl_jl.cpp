@@ -66,7 +66,8 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
 
   mod.method("load", [] (std::string const& s) {
     std::map<std::string, std::string> defaultParameters;
-    pypowsybl::JavaHandle network = pypowsybl::loadNetwork(s, defaultParameters, nullptr);
+    std::vector<std::string> postProcessors;
+    pypowsybl::JavaHandle network = pypowsybl::loadNetwork(s, defaultParameters, postProcessors, nullptr);
     return network;
   }, "Load a network from a file");
 

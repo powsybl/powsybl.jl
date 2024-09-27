@@ -48,3 +48,7 @@ jobs:
       - name: Test
         run: |
           julia test/print_version.jl
+
+      - name: Test
+        run: |
+          julia test/print_network.jl

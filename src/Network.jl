@@ -10,6 +10,10 @@ module Network
     handle::Powsybl.JavaHandle
   end
 
+  function get_network_metadata(network::NetworkHandle)
+      return Powsybl.get_network_metadata(network.handle)
+  end
+
   function get_elements(network::NetworkHandle, type::Powsybl.ElementType, all_attributes::Bool = false, attributes::Vector{String} = Vector{String}())
     filter_attributes = Powsybl.DEFAULT_ATTRIBUTES
     if all_attributes
@@ -168,4 +172,6 @@ module Network
   function load(network_file::String)::NetworkHandle
     return NetworkHandle(Powsybl.load(network_file))
   end
+
+  include("NetworkCreationUtils.jl")
 end

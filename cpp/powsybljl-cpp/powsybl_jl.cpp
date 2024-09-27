@@ -2,9 +2,15 @@
 
 #include "jlcxx/jlcxx.hpp"
 #include "powsybl-cpp.h"
+#include <iostream>
 
 // Necessary to compile to map struct with no constructor ?
 template <> struct jlcxx::IsMirroredType<series> : std::false_type {};
+template <> struct jlcxx::IsMirroredType<network_metadata> : std::false_type {};
+
+void logFromJava(int level, long timestamp, char* loggerName, char* message) {
+  //TODO Redirect log properly to julia logger
+}
 
 JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
 {
@@ -54,6 +60,8 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   auto preJavaCall = [](pypowsybl::GraalVmGuard* guard, exception_handler* exc){ };
   auto postJavaCall = [](){ };
   pypowsybl::init(preJavaCall, postJavaCall);
+  auto fptr = &::logFromJava;
+  pypowsybl::setupLoggerCallback(reinterpret_cast<void *&>(fptr));
 
   mod.method("get_version_table", &pypowsybl::getVersionTable, "Get an ASCII table with all PowSybBl modules version");
   mod.method("set_java_library_path", [] (std::string const& path) {
@@ -71,6 +79,14 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
     return network;
   }, "Load a network from a file");
 
+  mod.method("create_network", [] (std::string const& name, std::string const& id) {
+    return pypowsybl::createNetwork(name, id);
+  }, "create an example network");
+
+  mod.method("get_network_import_formats", [] () {
+      return pypowsybl::getNetworkImportFormats();
+    }, "Get available import format");
+
   mod.add_type<series>("SeriesType")
         .method("name", [](series& s) { return std::string(s.name); })
         .method("index", [](series& s) { return (bool) s.index; })
@@ -84,6 +100,27 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
         .method("as_string_array", [](series& s) {
                   return pypowsybl::toVector<std::string>((array *) & s.data);
         });
+
+  mod.add_type<network_metadata>("NetworkMetadata")
+        .method("id", [](const network_metadata& att) {
+           return std::string(att.id);
+        })
+        .method("name", [](const network_metadata& att) {
+           return std::string(att.name);
+        })
+        .method("source_format", [](const network_metadata& att) {
+           return std::string(att.source_format);
+        })
+        .method("forecast_distance", [](const network_metadata& att) {
+           return att.forecast_distance;
+         })
+        .method("case_date", [](const network_metadata& att) {
+           return att.case_date;
+        });
+
+  mod.method("get_network_metadata", [] (pypowsybl::JavaHandle handle) {
+        return pypowsybl::getNetworkMetadata(handle);
+        }, "Get network attributes");
 
   mod.add_type<pypowsybl::SeriesArray>("SeriesArray")
       .method("as_array", [](pypowsybl::SeriesArray& seriesArray) {

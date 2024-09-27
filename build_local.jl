@@ -13,13 +13,13 @@ cd $WORKSPACE/srcdir
 
 # Get binary for powsybl-java, generated with GraalVm
 if [[ "${target}" == *-mingw* ]]; then
-    wget https://github.com/powsybl/pypowsybl/releases/download/vBinariesDeployment/binaries-vBinariesDeployment-windows.zip -O powsybl-java.zip
+    wget https://github.com/powsybl/pypowsybl/releases/download/v1.7.0/binaries-v1.7.0-windows.zip -O powsybl-java.zip
 fi
 if [[ "${target}" == *-linux-* ]]; then
-    wget https://github.com/powsybl/pypowsybl/releases/download/vBinariesDeployment/binaries-vBinariesDeployment-linux.zip -O powsybl-java.zip
+    wget https://github.com/powsybl/pypowsybl/releases/download/v1.7.0/binaries-v1.7.0-linux.zip -O powsybl-java.zip
 fi
 if [[ "${target}" == *-apple-* ]]; then
-    wget https://github.com/powsybl/pypowsybl/releases/download/vBinariesDeployment/binaries-vBinariesDeployment-darwin.zip -O powsybl-java.zip
+    wget https://github.com/powsybl/pypowsybl/releases/download/v1.7.0/binaries-v1.7.0-darwin.zip -O powsybl-java.zip
 fi
 unzip powsybl-java.zip -d $prefix
 

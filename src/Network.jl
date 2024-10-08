@@ -8,6 +8,11 @@ module Network
 
   mutable struct NetworkHandle
     handle::Powsybl.JavaHandle
+    id::String
+    name::String
+    source_format::String
+    forecast_distance::Int32
+    case_date::Float64
   end
 
   function get_network_metadata(network::NetworkHandle)
@@ -170,7 +175,13 @@ module Network
   end
 
   function load(network_file::String)::NetworkHandle
-    return NetworkHandle(Powsybl.load(network_file))
+      handle = Powsybl.load(network_file)
+    return NetworkHandle(Powsybl.load(network_file),
+        Powsybl.id(handle),
+        Powsybl.name(handle),
+        Powsybl.source_format(handle),
+        Powsybl.forecast_distance(handle),
+        Powsybl.case_date(handle))
   end
 
   include("NetworkCreationUtils.jl")

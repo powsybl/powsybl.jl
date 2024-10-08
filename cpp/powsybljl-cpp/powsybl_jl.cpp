@@ -102,25 +102,21 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
         });
 
   mod.add_type<network_metadata>("NetworkMetadata")
-        .method("id", [](const network_metadata& att) {
-           return std::string(att.id);
+        .method("id", [](pypowsybl::JavaHandle handle) {
+           return std::string(pypowsybl::getNetworkMetadata(handle)->id);
         })
-        .method("name", [](const network_metadata& att) {
-           return std::string(att.name);
+        .method("name", [](pypowsybl::JavaHandle handle) {
+           return std::string(pypowsybl::getNetworkMetadata(handle)->name);
         })
-        .method("source_format", [](const network_metadata& att) {
-           return std::string(att.source_format);
+        .method("source_format", [](pypowsybl::JavaHandle handle) {
+           return std::string(pypowsybl::getNetworkMetadata(handle)->source_format);
         })
-        .method("forecast_distance", [](const network_metadata& att) {
-           return att.forecast_distance;
+        .method("forecast_distance", [](pypowsybl::JavaHandle handle) {
+           return pypowsybl::getNetworkMetadata(handle)->forecast_distance;
          })
-        .method("case_date", [](const network_metadata& att) {
-           return att.case_date;
+        .method("case_date", [](pypowsybl::JavaHandle handle) {
+           return pypowsybl::getNetworkMetadata(handle)->case_date;
         });
-
-  mod.method("get_network_metadata", [] (pypowsybl::JavaHandle handle) {
-        return pypowsybl::getNetworkMetadata(handle);
-        }, "Get network attributes");
 
   mod.add_type<pypowsybl::SeriesArray>("SeriesArray")
       .method("as_array", [](pypowsybl::SeriesArray& seriesArray) {

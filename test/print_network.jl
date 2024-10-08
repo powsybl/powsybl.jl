@@ -2,14 +2,13 @@ using Powsybl
 using CxxWrap
 using Test
 
-network = Powsybl.Network.NetworkCreationUtils.create_ieee9()
-network_metadata = Powsybl.Network.get_network_metadata(network)
+network = Powsybl.Network.create_ieee9()
 
-@test Powsybl.id(network_metadata[]) == "ieee9cdf"
-@test Powsybl.name(network_metadata[]) == "ieee9cdf"
-@test Powsybl.source_format(network_metadata[]) == "IEEE-CDF"
-@test Powsybl.forecast_distance(network_metadata[]) == 0
-@test Powsybl.case_date(network_metadata[]) ≈ 1.240704e9
+@test network.id == "ieee9cdf"
+@test network.name == "ieee9cdf"
+@test network.source_format == "IEEE-CDF"
+@test network.forecast_distance == 0
+@test network.case_date ≈ 1.240704e9
 
 lines = Powsybl.Network.get_lines(network)
 @test names(lines) == ["id", "name", "r", "x", "g1", "b1", "g2",

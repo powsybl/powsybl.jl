@@ -1,7 +1,7 @@
 name = "Powsybl"
 uuid = "cc5d7637-2d3a-48eb-b6d4-9415154f8200"
 authors = ["Bertrand Rix"]
-version = "0.1"
+version = "0.1-SNAPSHOT"
 
 [deps]
 CxxWrap = "1f15a43c-97ca-5a2a-ae31-89f07a497df4"

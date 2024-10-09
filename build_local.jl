@@ -1,7 +1,7 @@
 using BinaryBuilder, Pkg
 
 name = "Powsybl"
-version = v"0.1"
+version = v"0.1-SNAPSHOT"
 sources = [
     DirectorySource("./cpp", target="cpp")
 ]

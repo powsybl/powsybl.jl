@@ -1,5 +1,4 @@
 using Powsybl
-using CxxWrap
 using Test
 
 network = Powsybl.Network.create_ieee9()

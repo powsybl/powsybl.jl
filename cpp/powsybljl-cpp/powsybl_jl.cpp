@@ -2,7 +2,6 @@
 
 #include "jlcxx/jlcxx.hpp"
 #include "powsybl-cpp.h"
-#include <iostream>
 
 // Necessary to compile to map struct with no constructor ?
 template <> struct jlcxx::IsMirroredType<series> : std::false_type {};

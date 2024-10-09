@@ -8,20 +8,25 @@ sources = [
 
 julia_versions = [VERSION]
 
+platform = HostPlatform()
+
+@info string("Downloading pypowsybl java binaries for ", platform.tags["os"])
+if platform.tags["os"] == "linux"
+    Base.download("https://github.com/powsybl/pypowsybl/releases/download/v1.7.0/binaries-v1.7.0-linux.zip", "cpp/powsybl-java.zip")
+elseif  platform.tags["os"] == "windows"
+    Base.download("https://github.com/powsybl/pypowsybl/releases/download/v1.7.0/binaries-v1.7.0-windows.zip", "cpp/powsybl-java.zip")
+elseif platform.tags["os"] == "macos"
+    Base.download("https://github.com/powsybl/pypowsybl/releases/download/v1.7.0/binaries-v1.7.0-darwin.zip", "cpp/powsybl-java.zip")
+else
+    throw("Unsupported platform with os " * platform.tags["os"])
+end
+
+
 script = raw"""
 cd $WORKSPACE/srcdir
 
 # Get binary for powsybl-java, generated with GraalVm
-if [[ "${target}" == *-mingw* ]]; then
-    wget https://github.com/powsybl/pypowsybl/releases/download/vBinariesDeployment/binaries-vBinariesDeployment-windows.zip -O powsybl-java.zip
-fi
-if [[ "${target}" == *-linux-* ]]; then
-    wget https://github.com/powsybl/pypowsybl/releases/download/vBinariesDeployment/binaries-vBinariesDeployment-linux.zip -O powsybl-java.zip
-fi
-if [[ "${target}" == *-apple-* ]]; then
-    wget https://github.com/powsybl/pypowsybl/releases/download/vBinariesDeployment/binaries-vBinariesDeployment-darwin.zip -O powsybl-java.zip
-fi
-unzip powsybl-java.zip -d $prefix
+unzip cpp/powsybl-java.zip -d $prefix
 
 # Build powsybl-cpp API
 cd $WORKSPACE/srcdir/cpp/ && mkdir build && cd build
@@ -33,9 +38,6 @@ cd $WORKSPACE/srcdir/ && mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ../cpp/powsybljl-cpp -DJulia_PREFIX=$prefix -DJlCxx_DIR=$prefix/lib/cmake/JlCxx -DCMAKE_FIND_ROOT_PATH=$prefix -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TARGET_TOOLCHAIN} -DCMAKE_PREFIX_PATH=$prefix -DCMAKE_INSTALL_PREFIX=$prefix -DPOWSYBL_INSTALL_DIR=$prefix
 cmake --build . --target install --config Release
 """
-
-platforms = [HostPlatform()]
-@show platforms
 
 products = [
 LibraryProduct(["math", "libmath"], :libmath)
@@ -49,5 +51,5 @@ dependencies = [
     Dependency("libjulia_jll")
 ]
 
-build_tarballs(ARGS, name, version, sources, script, platforms, products, dependencies;
+build_tarballs(ARGS, name, version, sources, script, [platform], products, dependencies;
     preferred_gcc_version=v"12", julia_compat="1.6")

@@ -2,31 +2,40 @@ using BinaryBuilder, Pkg
 
 name = "Powsybl"
 version = v"0.1.0"
-sources = [
-    DirectorySource("./cpp", target="cpp")
-]
 
 julia_versions = [VERSION]
 
 platform = HostPlatform()
 
-@info string("Downloading pypowsybl java binaries for ", platform.tags["os"])
-if platform.tags["os"] == "linux"
-    Base.download("https://github.com/powsybl/pypowsybl/releases/download/v1.7.0/binaries-v1.7.0-linux.zip", "cpp/powsybl-java.zip")
-elseif  platform.tags["os"] == "windows"
-    Base.download("https://github.com/powsybl/pypowsybl/releases/download/v1.7.0/binaries-v1.7.0-windows.zip", "cpp/powsybl-java.zip")
-elseif platform.tags["os"] == "macos"
-    Base.download("https://github.com/powsybl/pypowsybl/releases/download/v1.7.0/binaries-v1.7.0-darwin.zip", "cpp/powsybl-java.zip")
-else
-    throw("Unsupported platform with os " * platform.tags["os"])
-end
+pypowsybl_version = v"1.7.0"
+
+sources = [
+    DirectorySource("./cpp", target="cpp"),
+    ArchiveSource("https://github.com/powsybl/pypowsybl/releases/download/v$(pypowsybl_version)/binaries-v$(pypowsybl_version)-windows.zip",
+                  "82d3cee44992dcceaee7549f17351155e91c9eb2bdce97b1cf6c0107155991e8",
+                  "powsybl-java-windows"),
+    ArchiveSource("https://github.com/powsybl/pypowsybl/releases/download/v$(pypowsybl_version)/binaries-v$(pypowsybl_version)-linux.zip",
+                  "8832e1ff432e97807dc6dfddb4b001dd2c3c05a7411fc3748c8af3854a3b448c",
+                  "powsybl-java-linux"),
+    ArchiveSource("https://github.com/powsybl/pypowsybl/releases/download/v$(pypowsybl_version)/binaries-v$(pypowsybl_version)-darwin.zip",
+                  "d541eb07a334d9272b167cb30f7d846ff109db49ac61a9776593c1aface18324",
+                  "powsybl-java-darwin")
+]
 
 
 script = raw"""
 cd $WORKSPACE/srcdir
 
 # Get binary for powsybl-java, generated with GraalVm
-unzip cpp/powsybl-java.zip -d $prefix
+if [[ "${target}" == *-mingw* ]]; then
+    cp -r powsybl-java-windows/* ${prefix}
+fi
+if [[ "${target}" == *-linux-* ]]; then
+    cp -r powsybl-java-linux/* ${prefix}
+fi
+if [[ "${target}" == *-apple-* ]]; then
+    cp -r powsybl-java-darwin/* ${prefix}
+fi
 
 # Build powsybl-cpp API
 cd $WORKSPACE/srcdir/cpp/ && mkdir build && cd build
@@ -52,4 +61,4 @@ dependencies = [
 ]
 
 build_tarballs(ARGS, name, version, sources, script, [platform], products, dependencies;
-    preferred_gcc_version=v"12", julia_compat="1.6")
+    preferred_gcc_version=v"10", julia_compat="1.6")

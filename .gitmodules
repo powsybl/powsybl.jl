@@ -1,3 +1,0 @@
-[submodule "cpp/pypowsybl"]
-	path = cpp/pypowsybl
-	url = https://github.com/powsybl/pypowsybl.git

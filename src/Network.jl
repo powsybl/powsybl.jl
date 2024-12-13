@@ -3,8 +3,8 @@ module Network
   using CxxWrap
   using DataFrames
 
-  const nominal_apparent_power = 100.0
-  const per_unit = false
+  nominal_apparent_power::Float64 = 100.0
+  per_unit::Bool = false
 
   mutable struct NetworkHandle
     handle::Powsybl.JavaHandle

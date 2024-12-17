@@ -30,6 +30,7 @@ From a loaded network you can have a access to the following network elements (a
 * buses
 * bus_breaker_view_buses
 * generators
+* loads
 * batteries
 * lines
 * 2_windings_transformers
@@ -53,6 +54,7 @@ From a loaded network you can have a access to the following network elements (a
 * injections
 * branches
 * terminals
+* operational_limits
 
 ```julia
 
@@ -106,4 +108,49 @@ julia> @info Powsybl.Network.get_lines(network)[:,["id", "name", "p1"]]
 
 ```
 
+### Network extensions
 
+Network extensions can be accessed through a call to Powsybl.Network.get_extensions
+
+```julia 
+
+julia> using Powsybl
+
+julia> network = Powsybl.Network.create_micro_grid_be()
+Powsybl.Network.NetworkHandle(Powsybl.JavaHandleAllocated(Ptr{Nothing} @0x0000000020f43260), "urn:uuid:d400c631-75a0-4c30-8aed-832b0d282e73", "urn:uuid:d400c631-75a0-4c30-8aed-832b0d282e73", "CGMES", 0, 1.4016186e9)
+
+julia> Powsybl.Network.get_extensions(network, "activePowerControl")
+2×6 DataFrame
+ Row │ id                                 droop    participate  participation_factor  max_target_p  min_target_p 
+     │ String                             Float64  Bool         Float64               Float64       Float64      
+─────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────
+   1 │ 3a3b27be-b18b-4385-b557-6735d733…      NaN         true                   0.0           NaN           NaN
+   2 │ 550ebe0d-f2b2-48c1-991f-cebea43a…      NaN         true                   0.0           NaN           NaN
+
+```
+
+Available extensions can be listed using the following call :
+
+```julia
+julia> Powsybl.Network.get_extensions_names()
+19-element Vector{String}:
+ "activePowerControl"
+ "branchObservability"
+ "busbarSectionPosition"
+ "coordinatedReactiveControl"
+ "detail"
+ "entsoeArea"
+ "entsoeCategory"
+ "generatorShortCircuit"
+ "hvdcAngleDroopActivePowerControl"
+ "hvdcOperatorActivePowerRange"
+ "identifiableShortCircuit"
+ "injectionObservability"
+ "linePosition"
+ "measurements"
+ "position"
+ "secondaryVoltageControl"
+ "slackTerminal"
+ "standbyAutomaton"
+ "substationPosition"
+```

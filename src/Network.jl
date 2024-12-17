@@ -19,6 +19,10 @@ module Network
       return Powsybl.get_network_metadata(network.handle)
   end
 
+  function get_extensions_names()
+      return [String(extension_name) for extension_name in Powsybl.get_extensions_names()]
+  end
+
   function get_elements(network::NetworkHandle, type::Powsybl.ElementType, all_attributes::Bool = false, attributes::Vector{String} = Vector{String}())
     filter_attributes = Powsybl.DEFAULT_ATTRIBUTES
     if all_attributes
@@ -154,6 +158,19 @@ module Network
     return get_elements(network, Powsybl.TERMINAL, all_attributes, attributes)
   end
 
+  function get_loads(network::NetworkHandle, all_attributes::Bool = false, attributes::Vector{String} = Vector{String}())
+    return get_elements(network, Powsybl.LOAD, all_attributes, attributes)
+  end
+
+  function get_operational_limits(network::NetworkHandle, all_attributes::Bool = false, attributes::Vector{String} = Vector{String}())
+    return get_elements(network, Powsybl.OPERATIONAL_LIMITS, all_attributes, attributes)
+  end
+
+  function get_extensions(network::NetworkHandle, extension_name::String, table_name::String = "")
+    series_array = Powsybl.create_network_elements_extension_series_array(network.handle, extension_name, table_name)
+    return create_dataframe_from_series_array(series_array[])
+  end
+
   function create_dataframe_from_series_array(array::Powsybl.SeriesArray)
     myArray = Powsybl.as_array(array)
     df = DataFrame()
@@ -161,11 +178,15 @@ module Network
       type = Powsybl.type(serie)
       name = Powsybl.name(serie)
       if type == 0
-        data = Powsybl.as_string_array(serie)
+        # To avoid getting CxxWrap StdString type in the dataframe
+        data = [String(cxx_str_elem) for cxx_str_elem in Powsybl.as_string_array(serie)]
       elseif type == 1
         data = Powsybl.as_double_array(serie)
       elseif type == 2
         data = Powsybl.as_int_array(serie)
+      elseif type == 3
+        # To avoid getting CxxWrap CxxBool type in the dataframe
+        data = [Bool(cxx_bool_elem) for cxx_bool_elem in Powsybl.as_bool_array(serie)]
       else
         continue
       end

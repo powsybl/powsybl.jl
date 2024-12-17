@@ -98,6 +98,9 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
         })
         .method("as_string_array", [](series& s) {
                   return pypowsybl::toVector<std::string>((array *) & s.data);
+        })
+        .method("as_bool_array", [](series& s) {
+                  return jlcxx::ArrayRef<bool,1>(static_cast<bool*>(s.data.ptr), s.data.length);
         });
 
   mod.add_type<network_metadata>("NetworkMetadata")
@@ -128,6 +131,14 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
 
   mod.method("create_network_elements_series_array", [] (pypowsybl::JavaHandle handle, element_type type, std::vector<std::string> const& attributes, filter_attributes_type filter_attributes, bool nominal_apparent_power, double per_unit) {
       return pypowsybl::createNetworkElementsSeriesArray(handle, type, filter_attributes, attributes, nullptr, nominal_apparent_power, per_unit);
-      }, "Get a series");
+      }, "Create a network elements series array for a given element type");
+
+  mod.method("create_network_elements_extension_series_array", [] (pypowsybl::JavaHandle handle, std::string const& extension_name, std::string const& table_name) {
+        return pypowsybl::createNetworkElementsExtensionSeriesArray(handle, extension_name, table_name);
+        }, "Create a network elements extensions series array for a given extension name");
+
+  mod.method("get_extensions_names", [] () {
+          return pypowsybl::getExtensionsNames();
+          }, "Get all the extensions names available");
 
 }

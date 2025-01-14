@@ -1,5 +1,4 @@
 #include <string>
-#include <iostream>
 
 #include "jlcxx/jlcxx.hpp"
 #include "powsybl-cpp.h"
@@ -85,12 +84,6 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
     pypowsybl::JavaHandle network = pypowsybl::loadNetwork(s, parameters, postProcessors, nullptr);
     return network;
   }, "Load a network from a file");
-
-  mod.method("printMap", [] (const StringStringMap& parameters) {
-          for (auto element : parameters) {
-            std::cout << "Pair " << element.first << " = " << element.second << std::endl;
-          }
-        }, "dummy");
 
   mod.method("create_network", [] (std::string const& name, std::string const& id) {
     return pypowsybl::createNetwork(name, id);

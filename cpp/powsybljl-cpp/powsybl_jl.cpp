@@ -1,4 +1,5 @@
 #include <string>
+#include <iostream>
 
 #include "jlcxx/jlcxx.hpp"
 #include "powsybl-cpp.h"
@@ -7,6 +8,8 @@
 template <> struct jlcxx::IsMirroredType<series> : std::false_type {};
 template <> struct jlcxx::IsMirroredType<network_metadata> : std::false_type {};
 
+using StringStringMap = std::map<std::string, std::string>;
+
 void logFromJava(int level, long timestamp, char* loggerName, char* message) {
   //TODO Redirect log properly to julia logger
 }
@@ -14,6 +17,13 @@ void logFromJava(int level, long timestamp, char* loggerName, char* message) {
 JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
 {
   mod.add_type<pypowsybl::JavaHandle>("JavaHandle");
+
+  // No automatic mapping of std::map type
+  // Only map the basic we use on julia side...
+  mod.add_type<StringStringMap>("StringStringMap")
+        .method("put_element", [] (StringStringMap& map, const std::string& key, const std::string& value) {
+          map[key] = value;
+       });
 
   mod.add_bits<element_type>("ElementType", jlcxx::julia_type("CppEnum"));
   mod.set_const("BUS", element_type::BUS);
@@ -71,12 +81,16 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
           pypowsybl::closePypowsybl();
     }, "Closes powsybl module");
 
-  mod.method("load", [] (std::string const& s) {
-    std::map<std::string, std::string> defaultParameters;
-    std::vector<std::string> postProcessors;
-    pypowsybl::JavaHandle network = pypowsybl::loadNetwork(s, defaultParameters, postProcessors, nullptr);
+  mod.method("load", [] (std::string const& s, StringStringMap& parameters, std::vector<std::string>& postProcessors) {
+    pypowsybl::JavaHandle network = pypowsybl::loadNetwork(s, parameters, postProcessors, nullptr);
     return network;
   }, "Load a network from a file");
+
+  mod.method("printMap", [] (const StringStringMap& parameters) {
+          for (auto element : parameters) {
+            std::cout << "Pair " << element.first << " = " << element.second << std::endl;
+          }
+        }, "dummy");
 
   mod.method("create_network", [] (std::string const& name, std::string const& id) {
     return pypowsybl::createNetwork(name, id);
@@ -85,6 +99,10 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.method("get_network_import_formats", [] () {
       return pypowsybl::getNetworkImportFormats();
     }, "Get available import format");
+
+  mod.method("save_network", [] (pypowsybl::JavaHandle handle, std::string const& file, std::string const& format, StringStringMap const& parameters) {
+      pypowsybl::saveNetwork(handle, file, format, parameters, nullptr);
+    }, "Save network to a file in a given format");
 
   mod.add_type<series>("SeriesType")
         .method("name", [](series& s) { return std::string(s.name); })

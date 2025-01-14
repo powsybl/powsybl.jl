@@ -195,14 +195,18 @@ module Network
     return df
   end
 
-  function load(network_file::String)::NetworkHandle
-      handle = Powsybl.load(network_file)
+  function load(network_file::String, parameters::Dict{String, String} = Dict{String, String}(), postProcessors::Vector{String} = Vector{String}())::NetworkHandle
+      handle = Powsybl.load(network_file, Powsybl.dict_to_string_string_map(parameters), postProcessors)
     return NetworkHandle(Powsybl.load(network_file),
         Powsybl.id(handle),
         Powsybl.name(handle),
         Powsybl.source_format(handle),
         Powsybl.forecast_distance(handle),
         Powsybl.case_date(handle))
+  end
+
+  function save(network::NetworkHandle, network_file::String, format::String, parameters::Dict{String, String} = Dict{String, String}())
+      Powsybl.save_network(network.handle, network_file, format, Powsybl.dict_to_string_string_map(parameters))
   end
 
   include("NetworkCreationUtils.jl")

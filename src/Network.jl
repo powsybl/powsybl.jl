@@ -196,8 +196,8 @@ module Network
   end
 
   function load(network_file::String, parameters::Dict{String, String} = Dict{String, String}(), postProcessors::Vector{String} = Vector{String}())::NetworkHandle
-      handle = Powsybl.load(network_file, Powsybl.dict_to_string_string_map(parameters), postProcessors)
-    return NetworkHandle(Powsybl.load(network_file),
+      handle = Powsybl.load(network_file, Powsybl.dict_to_string_string_map(parameters), StdVector{StdString}(postProcessors))
+    return NetworkHandle(handle,
         Powsybl.id(handle),
         Powsybl.name(handle),
         Powsybl.source_format(handle),

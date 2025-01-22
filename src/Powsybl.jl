@@ -11,7 +11,7 @@ module Powsybl
   function dict_to_string_string_map(input_dict::Dict{String, String})::Powsybl.StringStringMap
       map = Powsybl.StringStringMap()
       for (key, value) in input_dict
-        map.put_element(key, value)
+        Powsybl.put_element(map, key, value)
       end
       return map
   end

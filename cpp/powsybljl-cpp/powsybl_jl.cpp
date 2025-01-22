@@ -89,9 +89,13 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
     return pypowsybl::createNetwork(name, id);
   }, "create an example network");
 
+  mod.method("get_network_available_post_processors", [] () {
+      return pypowsybl::getNetworkImportPostProcessors();
+    }, "Get available post processors");
+
   mod.method("get_network_import_formats", [] () {
-      return pypowsybl::getNetworkImportFormats();
-    }, "Get available import format");
+        return pypowsybl::getNetworkImportFormats();
+      }, "Get available import format");
 
   mod.method("save_network", [] (pypowsybl::JavaHandle handle, std::string const& file, std::string const& format, StringStringMap const& parameters) {
       pypowsybl::saveNetwork(handle, file, format, parameters, nullptr);

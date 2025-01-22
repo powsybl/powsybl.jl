@@ -19,6 +19,14 @@ module Network
       return Powsybl.get_network_metadata(network.handle)
   end
 
+  function get_network_import_formats()
+      return [String(format) for format in Powsybl.get_network_import_formats()]
+  end
+
+  function get_network_available_post_processors()
+      return [String(processor) for processor in Powsybl.get_network_available_post_processors()]
+  end
+
   function get_extensions_names()
       return [String(extension_name) for extension_name in Powsybl.get_extensions_names()]
   end

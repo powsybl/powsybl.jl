@@ -52,3 +52,7 @@ jobs:
       - name: Test
         run: |
           julia test/print_network.jl
+
+      - name: Test
+        run: |
+          julia test/import_export.jl

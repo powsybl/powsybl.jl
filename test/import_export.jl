@@ -1,7 +1,7 @@
 using Powsybl
 using Test
 
-network = Powsybl.Network.load("simple-eu.xiidm")
+network = Powsybl.Network.load("test/simple-eu.xiidm")
 @test network.name == "simple-eu"
 
 Powsybl.Network.save(network, "simple-eu.mat", "MATPOWER")

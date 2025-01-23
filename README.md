@@ -86,6 +86,20 @@ Network are loaded from file through the Powsybl.Network.load function. Supporte
 CGMES (all profiles in a zip archive), UCTE, XIIDM, BIIDM, JIIDM, Matpower, IEEE CDF, PSS/E and PowerFactory
 
 ```julia 
+julia> Powsybl.Network.get_network_import_formats()
+9-element Vector{String}:
+ "BIIDM"
+ "CGMES"
+ "IEEE-CDF"
+ "JIIDM"
+ "MATPOWER"
+ "POWER-FACTORY"
+ "PSS/E"
+ "UCTE"
+ "XIIDM"
+```
+
+```julia 
 
 julia> using Powsybl
 
@@ -107,6 +121,59 @@ julia> @info Powsybl.Network.get_lines(network)[:,["id", "name", "p1"]]
 └    8 │ 78736387-5f60-4832-b3fe-d50daf81…  BE-Line_3 + NL-Line_1    -5.09077
 
 ```
+
+Additionally, import formats may support specific parameters defined in Dict and a list of post processors in a string vector.
+The list of available post processors can be accessed through a call to Powsybl.Network.get_network_available_post_processors :
+
+````julia
+Powsybl.Network.get_network_available_post_processors()
+3-element Vector{String}:
+ "loadflowResultsCompletion"
+ "odreGeoDataImporter"
+ "replaceTieLinesByLines"
+````
+
+Parameters and post processors are optional arguments of the load function : 
+
+```julia 
+julia> parameters = Dict("psse.import.ignore-base-voltage" => "true")
+julia> postprocessors = ["replaceTieLinesByLines"]
+julia> network = Powsybl.Network.load("network.raw", parameters, postprocessors)
+```
+
+See the [documentation](https://powsybl.readthedocs.io/projects/powsybl-core/en/v6.5.1/grid_exchange_formats/index.html) for available import parameters.
+### Network export
+
+Network can exported to a file through the Powsybl.Network.save function, taking as arguments the network, a file and an export format. 
+
+```julia 
+julia> network = Powsybl.Network.load("CGMES_Full.zip")
+julia> Powsybl.Network.save(network, "Ouput.xiidm", "XIIDM")
+```
+
+The list of available export formats can be accessed :
+
+```julia 
+julia> Powsybl.Network.get_network_export_formats()
+8-element Vector{String}:
+ "AMPL"
+ "BIIDM"
+ "CGMES"
+ "JIIDM"
+ "MATPOWER"
+ "PSS/E"
+ "UCTE"
+ "XIIDM"
+```
+
+Additionally, a Dict of parameters can be provided as a fourth argument to the export function
+
+```julia 
+julia> network = Powsybl.Network.load("CGMES_Full.zip")
+julia> Powsybl.Network.save(network, "Ouput.xiidm", "XIIDM", Dict("iidm.export.xml.indent" => "true"))
+```
+
+See the [documentation](https://powsybl.readthedocs.io/projects/powsybl-core/en/v6.5.1/grid_exchange_formats/index.html) for available export parameters.
 
 ### Network extensions
 

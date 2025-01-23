@@ -1,3 +1,9 @@
+# Copyright (c) 2025, RTE (http://www.rte-france.com)
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# SPDX-License-Identifier: MPL-2.0
+
 module Network
   using ..Powsybl
   using CxxWrap
@@ -17,6 +23,18 @@ module Network
 
   function get_network_metadata(network::NetworkHandle)
       return Powsybl.get_network_metadata(network.handle)
+  end
+
+  function get_network_import_formats()
+      return [String(format) for format in Powsybl.get_network_import_formats()]
+  end
+
+  function get_network_export_formats()
+      return [String(format) for format in Powsybl.get_network_export_formats()]
+  end
+
+  function get_network_available_post_processors()
+      return [String(processor) for processor in Powsybl.get_network_available_post_processors()]
   end
 
   function get_extensions_names()
@@ -195,14 +213,18 @@ module Network
     return df
   end
 
-  function load(network_file::String)::NetworkHandle
-      handle = Powsybl.load(network_file)
-    return NetworkHandle(Powsybl.load(network_file),
+  function load(network_file::String, parameters::Dict{String, String} = Dict{String, String}(), postProcessors::Vector{String} = Vector{String}())::NetworkHandle
+      handle = Powsybl.load(network_file, Powsybl.dict_to_string_string_map(parameters), StdVector{StdString}(postProcessors))
+    return NetworkHandle(handle,
         Powsybl.id(handle),
         Powsybl.name(handle),
         Powsybl.source_format(handle),
         Powsybl.forecast_distance(handle),
         Powsybl.case_date(handle))
+  end
+
+  function save(network::NetworkHandle, network_file::String, format::String, parameters::Dict{String, String} = Dict{String, String}())
+      Powsybl.save_network(network.handle, network_file, format, Powsybl.dict_to_string_string_map(parameters))
   end
 
   include("NetworkCreationUtils.jl")

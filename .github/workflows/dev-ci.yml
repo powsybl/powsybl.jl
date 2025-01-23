@@ -45,10 +45,6 @@ jobs:
         run: |
           eval "julia -e 'using Pkg; Pkg.REPLMode.PRINTED_REPL_WARNING[] = true; pkg\"dev .\"'"
 
-      - name: Test
+      - name: Test Powsybl
         run: |
-          julia test/print_version.jl
-
-      - name: Test
-        run: |
-          julia test/print_network.jl
+          eval "julia -e 'using Pkg; Pkg.REPLMode.PRINTED_REPL_WARNING[] = true; pkg\"test Powsybl\"'"

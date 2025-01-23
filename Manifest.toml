@@ -2,6 +2,22 @@
 
 julia_version = "1.10.4"
 manifest_format = "2.0"
-project_hash = "c9f132592aaaf54261a2034f727dd79ff8b83045"
+project_hash = "9f9aa4bd3a7fbd2f7c394f9fceb1bbd562ec0717"
 
-[deps]
+[[deps.CxxWrap]]
+deps = ["Libdl", "MacroTools", "libcxxwrap_julia_jll"]
+git-tree-sha1 = "9208ab6d13777dace5981b451171891faf59e6a2"
+uuid = "1f15a43c-97ca-5a2a-ae31-89f07a497df4"
+version = "0.16.0"
+
+[[deps.DataFrames]]
+deps = ["Compat", "DataAPI", "DataStructures", "Future", "InlineStrings", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrecompileTools", "PrettyTables", "Printf", "Random", "Reexport", "SentinelArrays", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
+git-tree-sha1 = "fb61b4812c49343d7ef0b533ba982c46021938a6"
+uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+version = "1.7.0"
+
+[[deps.Powsybl_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "libcxxwrap_julia_jll", "libjulia_jll"]
+git-tree-sha1 = "b554e568f8c3d13a6944e9d29991fd9b434bca0c"
+uuid = "b8c81e45-bfcc-5af0-87df-fd7619bc5515"
+version = "0.1.0+0"

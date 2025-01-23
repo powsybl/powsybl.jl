@@ -151,7 +151,22 @@ julia> network = Powsybl.Network.load("CGMES_Full.zip")
 julia> Powsybl.Network.save(network, "Ouput.xiidm", "XIIDM")
 ```
 
-Additionally, a Dict of parameters can provided as a fourth argument to the export function
+The list of available export formats can be accessed :
+
+```julia 
+julia> Powsybl.Network.get_network_export_formats()
+8-element Vector{String}:
+ "AMPL"
+ "BIIDM"
+ "CGMES"
+ "JIIDM"
+ "MATPOWER"
+ "PSS/E"
+ "UCTE"
+ "XIIDM"
+```
+
+Additionally, a Dict of parameters can be provided as a fourth argument to the export function
 
 ```julia 
 julia> network = Powsybl.Network.load("CGMES_Full.zip")

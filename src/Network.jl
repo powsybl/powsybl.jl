@@ -23,6 +23,10 @@ module Network
       return [String(format) for format in Powsybl.get_network_import_formats()]
   end
 
+  function get_network_export_formats()
+      return [String(format) for format in Powsybl.get_network_export_formats()]
+  end
+
   function get_network_available_post_processors()
       return [String(processor) for processor in Powsybl.get_network_available_post_processors()]
   end

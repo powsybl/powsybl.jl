@@ -97,6 +97,10 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
         return pypowsybl::getNetworkImportFormats();
       }, "Get available import format");
 
+  mod.method("get_network_export_formats", [] () {
+          return pypowsybl::getNetworkExportFormats();
+        }, "Get available export format");
+
   mod.method("save_network", [] (pypowsybl::JavaHandle handle, std::string const& file, std::string const& format, StringStringMap const& parameters) {
       pypowsybl::saveNetwork(handle, file, format, parameters, nullptr);
     }, "Save network to a file in a given format");

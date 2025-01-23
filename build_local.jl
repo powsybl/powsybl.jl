@@ -1,7 +1,7 @@
 using BinaryBuilder, Pkg
 
 name = "Powsybl"
-version = v"0.1.0"
+version = v"0.2.0"
 
 julia_versions = [VERSION]
 

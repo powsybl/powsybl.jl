@@ -17,6 +17,21 @@ module LoadFlow
     NO_CALCULATION=LibPowsybl.NO_CALCULATION
   end
 
+  @enum BalanceType begin
+    PROPORTIONAL_TO_GENERATION_P=LibPowsybl.PROPORTIONAL_TO_GENERATION_P
+    PROPORTIONAL_TO_GENERATION_P_MAX=LibPowsybl.PROPORTIONAL_TO_GENERATION_P_MAX
+    PROPORTIONAL_TO_GENERATION_REMAINING_MARGIN=LibPowsybl.PROPORTIONAL_TO_GENERATION_REMAINING_MARGIN
+    PROPORTIONAL_TO_GENERATION_PARTICIPATION_FACTOR=LibPowsybl.PROPORTIONAL_TO_GENERATION_PARTICIPATION_FACTOR
+    PROPORTIONAL_TO_LOAD=LibPowsybl.PROPORTIONAL_TO_LOAD
+    PROPORTIONAL_TO_CONFORM_LOAD=LibPowsybl.PROPORTIONAL_TO_CONFORM_LOAD
+
+  end
+
+  @enum ConnectedComponentMode begin
+    ALL=LibPowsybl.ALL
+    MAIN=LibPowsybl.MAIN
+  end
+
   mutable struct LoadFlowParameters
       voltage_init_mode::VoltageInitMode
       transformer_voltage_control_on::Bool
@@ -27,10 +42,10 @@ module LoadFlow
       read_slack_bus::Bool
       write_slack_bus::Bool
       distributed_slack::Bool
-      balance_type::LibPowsybl.BalanceType
+      balance_type::BalanceType
       dc_use_transformer_ratio::Bool
       countries_to_balance::Vector{String}
-      connected_component_mode::LibPowsybl.ConnectedComponentMode
+      connected_component_mode::ConnectedComponentMode
       dc_power_factor::Float64
       provider_parameters::Dict{String, String}
   end
@@ -51,10 +66,10 @@ module LoadFlow
       LibPowsybl.read_slack_bus(c_parameters, parameters.read_slack_bus)
       LibPowsybl.write_slack_bus(c_parameters, parameters.write_slack_bus)
       LibPowsybl.distributed_slack(c_parameters, parameters.distributed_slack)
-      LibPowsybl.balance_type(c_parameters, parameters.balance_type)
+      LibPowsybl.balance_type(c_parameters, LibPowsybl.BalanceType(parameters.balance_type))
       LibPowsybl.dc_use_transformer_ratio(c_parameters, parameters.dc_use_transformer_ratio)
       LibPowsybl.countries_to_balance(c_parameters, StdVector{StdString}(parameters.countries_to_balance))
-      LibPowsybl.connected_component_mode(c_parameters, parameters.connected_component_mode)
+      LibPowsybl.connected_component_mode(c_parameters, LibPowsybl.ConnectedComponentMode(parameters.connected_component_mode))
       LibPowsybl.dc_power_factor(c_parameters, parameters.dc_power_factor)
       LibPowsybl.provider_parameters_keys(c_parameters, StdVector{StdString}(collect(keys(parameters.provider_parameters))))
       LibPowsybl.provider_parameters_values(c_parameters, StdVector{StdString}(collect(values(parameters.provider_parameters))))
@@ -72,10 +87,10 @@ module LoadFlow
         LibPowsybl.read_slack_bus(parameters),
         LibPowsybl.write_slack_bus(parameters),
         LibPowsybl.distributed_slack(parameters),
-        LibPowsybl.balance_type(parameters),
+        BalanceType(LibPowsybl.balance_type(parameters)),
         LibPowsybl.dc_use_transformer_ratio(parameters),
         LibPowsybl.countries_to_balance(parameters),
-        LibPowsybl.connected_component_mode(parameters),
+        ConnectedComponentMode(LibPowsybl.connected_component_mode(parameters)),
         LibPowsybl.dc_power_factor(parameters),
         Dict{String, String}())
   end

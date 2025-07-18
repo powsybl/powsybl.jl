@@ -38,7 +38,6 @@ end
 end
 
 @testset "Test load flow parameters" begin
-  network = Powsybl.Network.create_ieee14()
   parameters = Powsybl.LoadFlow.load_flow_parameters()
   @test parameters.voltage_init_mode == Powsybl.LoadFlow.UNIFORM_VALUES
   @test parameters.transformer_voltage_control_on == false
@@ -55,11 +54,9 @@ end
   @test parameters.connected_component_mode == Powsybl.LoadFlow.MAIN
   @test parameters.dc_power_factor == 1.0
   @test parameters.provider_parameters == Dict{String, String}()
-  #result = Powsybl.LoadFlow.run_ac(network, parameters)
-  #@test network.name == "ieee14cdf"
 end
 
-@testset "Test load flow results" begin
+@testset "Test AC load flow" begin
   network = Powsybl.Network.create_ieee9()
   parameters = Powsybl.LoadFlow.load_flow_parameters()
   result = Powsybl.LoadFlow.run_ac(network, parameters)
@@ -78,4 +75,11 @@ end
   @test slackbus_res.synchronous_component_num == 0
   @test slackbus_res.id == "VL1_0"
   @test isapprox(slackbus_res.active_power_mismatch, -4.324e-6; atol = 1e-3)
+end
+
+@testset "Test DC load flow" begin
+  network = Powsybl.Network.create_ieee9()
+  parameters = Powsybl.LoadFlow.load_flow_parameters()
+  result = Powsybl.LoadFlow.run_dc(network, parameters)
+  @test size(result.component_results, 1) == 1
 end

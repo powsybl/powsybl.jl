@@ -138,7 +138,8 @@ module LoadFlow
   end
 
   function run_dc(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "")
-      return LibPowsybl.run_load_flow(network.handle, load_flow_parameters_to_c_struct(parameters), true, provider)
+      load_flow_c_result = LibPowsybl.run_load_flow(network.handle, load_flow_parameters_to_c_struct(parameters), true, provider)
+      return load_flow_results_to_dataframe(load_flow_c_result)
   end
 
   function get_provider_parameters(provider::String = "")

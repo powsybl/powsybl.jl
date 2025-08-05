@@ -150,12 +150,12 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.method("close_powsybl", &pypowsybl::closePypowsybl, "Closes powsybl module");
 
   mod.method("load", [] (std::string const& s, StringStringMap& parameters, std::vector<std::string>& postProcessors) {
-    pypowsybl::JavaHandle network = pypowsybl::loadNetwork(s, parameters, postProcessors, nullptr);
+    pypowsybl::JavaHandle network = pypowsybl::loadNetwork(s, parameters, postProcessors, nullptr, false);
     return network;
   }, "Load a network from a file");
 
   mod.method("create_network", [] (std::string const& name, std::string const& id) {
-    return pypowsybl::createNetwork(name, id);
+    return pypowsybl::createNetwork(name, id, false);
   }, "create an example network");
 
   mod.method("get_network_available_post_processors", &pypowsybl::getNetworkImportPostProcessors, "Get available post processors");

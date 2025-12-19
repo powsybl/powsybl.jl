@@ -24,12 +24,11 @@ module LoadFlow
     PROPORTIONAL_TO_GENERATION_PARTICIPATION_FACTOR=LibPowsybl.PROPORTIONAL_TO_GENERATION_PARTICIPATION_FACTOR
     PROPORTIONAL_TO_LOAD=LibPowsybl.PROPORTIONAL_TO_LOAD
     PROPORTIONAL_TO_CONFORM_LOAD=LibPowsybl.PROPORTIONAL_TO_CONFORM_LOAD
-
   end
 
   @enum ConnectedComponentMode begin
-    ALL=LibPowsybl.ALL
-    MAIN=LibPowsybl.MAIN
+    ALL=LibPowsybl.ALL_CC
+    MAIN=LibPowsybl.MAIN_CC
   end
 
   mutable struct LoadFlowParameters

@@ -7,18 +7,30 @@
  */
 #include <string>
 #include <functional>
+#include <algorithm>
 #include <memory>
 #include <iostream>
 #include <thread>
 
 #include "jlcxx/jlcxx.hpp"
-#include "powsybl-cpp.h"
+#include "powsybl_jl.h"
 
 // Necessary to compile to map struct with no constructor ?
 template <> struct jlcxx::IsMirroredType<series> : std::false_type {};
 template <> struct jlcxx::IsMirroredType<network_metadata> : std::false_type {};
 template <> struct jlcxx::IsMirroredType<loadflow_component_result> : std::false_type {};
 template <> struct jlcxx::IsMirroredType<slack_bus_result> : std::false_type {};
+
+ZoneWrapper::ZoneWrapper(zone* zonePtr) :
+  zonePtr(zonePtr) {
+}
+
+ZoneWrapper::~ZoneWrapper() {
+}
+
+zone* ZoneWrapper::get() const {
+  return zonePtr;
+}
 
 using StringStringMap = std::map<std::string, std::string>;
 
@@ -138,6 +150,36 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.set_const("DEFAULT_ATTRIBUTES", filter_attributes_type::DEFAULT_ATTRIBUTES);
   mod.set_const("SELECTION_ATTRIBUTES", filter_attributes_type::SELECTION_ATTRIBUTES);
 
+  mod.add_bits<contingency_context_type>("ContingencyContextType", jlcxx::julia_type("CppEnum"));
+  mod.set_const("ALL", contingency_context_type::ALL);
+  mod.set_const("NONE", contingency_context_type::NONE);
+  mod.set_const("SPECIFIC", contingency_context_type::SPECIFIC);
+  mod.set_const("ONLY_CONTINGENCIES", contingency_context_type::ONLY_CONTINGENCIES);
+
+  mod.add_bits<sensitivity_function_type>("SensitivityFunctionType", jlcxx::julia_type("CppEnum"));
+  mod.set_const("BRANCH_ACTIVE_POWER_1", sensitivity_function_type::BRANCH_ACTIVE_POWER_1);
+  mod.set_const("BRANCH_CURRENT_1", sensitivity_function_type::BRANCH_CURRENT_1);
+  mod.set_const("BRANCH_REACTIVE_POWER_1", sensitivity_function_type::BRANCH_REACTIVE_POWER_1);
+  mod.set_const("BRANCH_ACTIVE_POWER_2", sensitivity_function_type::BRANCH_ACTIVE_POWER_2);
+  mod.set_const("BRANCH_CURRENT_2", sensitivity_function_type::BRANCH_CURRENT_2);
+  mod.set_const("BRANCH_REACTIVE_POWER_2", sensitivity_function_type::BRANCH_REACTIVE_POWER_2);
+  mod.set_const("BRANCH_ACTIVE_POWER_3", sensitivity_function_type::BRANCH_ACTIVE_POWER_3);
+  mod.set_const("BRANCH_CURRENT_3", sensitivity_function_type::BRANCH_CURRENT_3);
+  mod.set_const("BRANCH_REACTIVE_POWER_3", sensitivity_function_type::BRANCH_REACTIVE_POWER_3);
+  mod.set_const("BUS_REACTIVE_POWER", sensitivity_function_type::BUS_REACTIVE_POWER);
+  mod.set_const("BUS_VOLTAGE", sensitivity_function_type::BUS_VOLTAGE);
+
+  mod.add_bits<sensitivity_variable_type>("SensitivityVariableType", jlcxx::julia_type("CppEnum"));
+  mod.set_const("AUTO_DETECT", sensitivity_variable_type::AUTO_DETECT);
+  mod.set_const("INJECTION_ACTIVE_POWER", sensitivity_variable_type::INJECTION_ACTIVE_POWER);
+  mod.set_const("INJECTION_REACTIVE_POWER", sensitivity_variable_type::INJECTION_REACTIVE_POWER);
+  mod.set_const("TRANSFORMER_PHASE", sensitivity_variable_type::TRANSFORMER_PHASE);
+  mod.set_const("BUS_TARGET_VOLTAGE", sensitivity_variable_type::BUS_TARGET_VOLTAGE);
+  mod.set_const("HVDC_LINE_ACTIVE_POWER", sensitivity_variable_type::HVDC_LINE_ACTIVE_POWER);
+  mod.set_const("TRANSFORMER_PHASE_1", sensitivity_variable_type::TRANSFORMER_PHASE_1);
+  mod.set_const("TRANSFORMER_PHASE_2", sensitivity_variable_type::TRANSFORMER_PHASE_2);
+  mod.set_const("TRANSFORMER_PHASE_3", sensitivity_variable_type::TRANSFORMER_PHASE_3);
+
   auto preJavaCall = [](pypowsybl::GraalVmGuard* guard, exception_handler* exc){ };
   auto postJavaCall = [](){ };
   pypowsybl::init(preJavaCall, postJavaCall);
@@ -225,8 +267,8 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
 
   // ConnectedComponentMode
   mod.add_bits<pypowsybl::ConnectedComponentMode>("ConnectedComponentMode", jlcxx::julia_type("CppEnum"));
-  mod.set_const("ALL", pypowsybl::ConnectedComponentMode::ALL);
-  mod.set_const("MAIN", pypowsybl::ConnectedComponentMode::MAIN);
+  mod.set_const("ALL_CC", pypowsybl::ConnectedComponentMode::ALL);
+  mod.set_const("MAIN_CC", pypowsybl::ConnectedComponentMode::MAIN);
 
   // BalanceType
   mod.add_bits<pypowsybl::BalanceType>("BalanceType", jlcxx::julia_type("CppEnum"));
@@ -309,4 +351,36 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.method("create_loadflow_provider_parameters_series_array", [] (const std::string& provider) {
             return pypowsybl::createLoadFlowProviderParametersSeriesArray(provider);
     }, "Create a parameters series array for a given loadflow provider");
+
+  mod.method("create_sensitivity_analysis", &pypowsybl::createSensitivityAnalysis, "Create sensitivity analysis");
+
+  mod.add_type<ZoneWrapper>("Zone")
+    .constructor([] (const std::string& id, const std::vector<std::string> injection_ids, const std::vector<double> shift_keys) { return new ZoneWrapper(pypowsybl::createZone(id, injection_ids, shift_keys)); });
+
+  mod.method("set_zones", [] (const pypowsybl::JavaHandle& sensitivity_context, const jlcxx::ArrayRef<jl_value_t*> zones) {
+          for(jl_value_t* v : zones) {
+            const ZoneWrapper& f = jlcxx::unbox<ZoneWrapper&>(v);
+          }
+      }, "Add zones to sensitivity analysis");
+
+  mod.method("show_zone", [] (const ZoneWrapper& zone) {
+            std::cout << zone.get()->id << std::endl;
+        }, "Add zones to sensitivity analysis");
+
+  mod.method("add_factor_matrix", [] (const pypowsybl::JavaHandle& sensitivity_context,
+                                      const std::string matrix_id,
+                                      const std::vector<std::string>& branches_ids,
+                                      const std::vector<std::string>& variables_ids,
+                                      const std::vector<std::string>& contingencies_ids,
+                                      contingency_context_type contingency_context,
+                                      sensitivity_function_type sensitivity_function,
+                                      sensitivity_variable_type sensitivity_variable)  {
+      pypowsybl::addFactorMatrix(sensitivity_context, matrix_id, branches_ids, variables_ids, contingencies_ids, contingency_context, sensitivity_function, sensitivity_variable);
+    }, "Add a factor matrix to a sensitivity analysis");
+
+  mod.method("add_contingency", [] (const pypowsybl::JavaHandle& context,
+                                    const std::string& contingency_id,
+                                    const std::vector<std::string>& element_ids)  {
+        pypowsybl::addContingency(context, contingency_id, element_ids);
+    }, "Add a contingency to a sensitivity analysis");
 }

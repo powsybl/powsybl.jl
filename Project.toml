@@ -10,7 +10,7 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 
 [compat]
 julia = "1.6.7"
-CxxWrap = "0.16.0"
+CxxWrap = "0.17.3"
 DataFrames = "1.7.0"
 Powsybl_jll = "0.2.0"
 

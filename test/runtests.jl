@@ -7,6 +7,9 @@
 using Powsybl
 using Test
 
+# To avoid reading potential user specific configuration
+Powsybl.LibPowsybl.set_config_read(false)
+
 @testset "Test network data" begin
   network = Powsybl.Network.create_ieee9()
 

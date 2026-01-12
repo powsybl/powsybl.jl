@@ -19,4 +19,8 @@ module LibPowsybl
   function close()
     close_powsybl()
   end
+
+  function set_config_read_(read_config::Bool = true)
+    set_config_read_internal(read_config)
+  end
 end

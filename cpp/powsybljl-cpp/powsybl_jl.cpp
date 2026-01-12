@@ -149,6 +149,8 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
 
   mod.method("close_powsybl", &pypowsybl::closePypowsybl, "Closes powsybl module");
 
+  mod.method("set_config_read_internal", &pypowsybl::setConfigRead, "Set config read mode");
+
   mod.method("load", [] (std::string const& s, StringStringMap& parameters, std::vector<std::string>& postProcessors) {
     pypowsybl::JavaHandle network = pypowsybl::loadNetwork(s, parameters, postProcessors, nullptr, false);
     return network;

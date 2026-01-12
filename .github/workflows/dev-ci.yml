@@ -34,10 +34,10 @@ jobs:
         run: pip install jill --user -U
 
       - name: Install julia 1.7 for binary builder build of Powsybl_jll
-        run: jill install 1.7
+        run: jill install --confirm 1.7
 
       - name: Install julia 1.12.3 as target version for the test suite
-        run: jill install 1.12.3
+        run: jill install --confirm 1.12.3
 
       - name: Checkout sources
         uses: actions/checkout@v3

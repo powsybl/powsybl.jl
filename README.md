@@ -221,3 +221,100 @@ julia> Powsybl.Network.get_extensions_names()
  "standbyAutomaton"
  "substationPosition"
 ```
+
+### Load flow module
+
+A load flow computation can be done using the LoadFlow submodule.
+
+#### Parameters
+
+The most important part before running a load flow is knowing the parameters and change them if needed. Here is a list of parameters explicitly mapped:
+
+```julia
+  mutable struct LoadFlowParameters
+      voltage_init_mode::VoltageInitMode
+      transformer_voltage_control_on::Bool
+      use_reactive_limits::Bool
+      phase_shifter_regulation_on::Bool
+      twt_split_shunt_admittance::Bool
+      shunt_compensator_voltage_control_on::Bool
+      read_slack_bus::Bool
+      write_slack_bus::Bool
+      distributed_slack::Bool
+      balance_type::BalanceType
+      dc_use_transformer_ratio::Bool
+      countries_to_balance::Vector{String}
+      connected_component_mode::ConnectedComponentMode
+      dc_power_factor::Float64
+      provider_parameters::Dict{String, String}
+  end
+```
+
+A default parameters set can be created : 
+
+```julia
+julia> using Powsybl
+julia> parameters = Powsybl.LoadFlow.load_flow_parameters()
+julia> parameters
+Powsybl.LoadFlow.LoadFlowParameters(Powsybl.LoadFlow.UNIFORM_VALUES, false, true, false, false, false, true, true, true, Powsybl.LoadFlow.PROPORTIONAL_TO_GENERATION_P_MAX, true, String[], Powsybl.LoadFlow.MAIN, 1.0, Dict{String, String}())
+```
+
+All parameters are fully described in [Powsybl load flow parameters documentation](https://powsybl.readthedocs.io/projects/powsybl-core/en/stable/simulation/loadflow/configuration.html).
+Some parameters are not supported by all load flow providers but specific to only one. These specific parameters could be specified in a less typed way than common parameters using the provider_parameters attribute.
+
+#### Running a load flow
+
+Load flow can launched in AC :
+
+```julia
+julia> using Powsybl
+julia> network = Powsybl.Network.create_ieee9()
+julia> parameters = Powsybl.LoadFlow.load_flow_parameters()
+julia> result = Powsybl.LoadFlow.run_ac(network, parameters) 
+```
+
+or in DC :
+
+```julia
+julia> result = Powsybl.LoadFlow.run_dc(network, parameters) 
+```
+
+The result returned is a set of two dataframes, the component results and the slack bus results related to a component.
+
+```julia
+julia> result.component_results
+1×7 DataFrame
+ Row │ connected_component_num  synchronous_component_num  status     status_text  iteration_count  reference_bus_id  distributed_active_power 
+     │ Int32                    Int32                      LoadFlow…  String       Int32            String            Float64
+─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   1 │                       0                          0  CONVERGED  Converged                  3  VL1_0                                  0.0
+```
+
+```julia
+julia> result.slack_bus_results
+1×4 DataFrame
+ Row │ connected_component_num  synchronous_component_num  id     active_power_mismatch 
+     │ Any                      Any                        Any    Any
+─────┼──────────────────────────────────────────────────────────────────────────────────
+   1 │ 0                        0                          VL1_0  -4.3244e-6
+```
+
+But the main output of the loadflow is actually the updated data in the network itself: all voltages and flows are now updated with the computed values.
+
+```julia
+
+julia> Powsybl.Network.get_buses(network)
+9×7 DataFrame
+ Row │ id      name    v_mag     v_angle    connected_component  synchronous_component  voltage_level_id 
+     │ String  String  Float64   Float64    Int32                Int32                  String
+─────┼───────────────────────────────────────────────────────────────────────────────────────────────────
+   1 │ VL1_0           104.0      0.0                         0                      0  VL1
+   2 │ VL1_1           102.579   -2.21679                     0                      0  VL1
+   3 │ VL2_0           102.5      9.28001                     0                      0  VL2
+   4 │ VL2_1           102.577    3.7197                      0                      0  VL2
+   5 │ VL3_0           102.5      4.66475                     0                      0  VL3
+   6 │ VL3_1           103.235    1.96672                     0                      0  VL3
+   7 │ VL5_0            99.5631  -3.9888                      0                      0  VL5
+   8 │ VL6_0           101.265   -3.6874                      0                      0  VL6
+   9 │ VL8_0           101.588    0.727537                    0                      0  VL8
+````

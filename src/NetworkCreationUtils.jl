@@ -5,13 +5,13 @@
 # SPDX-License-Identifier: MPL-2.0
 
 function _create_network(name::String, network_id::String = "")
-  handle = Powsybl.create_network(name, network_id)
+  handle = LibPowsybl.create_network(name, network_id)
   return Network.NetworkHandle(handle,
-    Powsybl.id(handle),
-    Powsybl.name(handle),
-    Powsybl.source_format(handle),
-    Powsybl.forecast_distance(handle),
-    Powsybl.case_date(handle))
+    LibPowsybl.id(handle),
+    LibPowsybl.name(handle),
+    LibPowsybl.source_format(handle),
+    LibPowsybl.forecast_distance(handle),
+    LibPowsybl.case_date(handle))
 end
 
 function create_empty(network_id::String = "")

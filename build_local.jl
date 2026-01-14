@@ -9,23 +9,19 @@ using BinaryBuilder, Pkg
 name = "Powsybl"
 version = v"0.2.0"
 
-julia_versions = [VERSION]
-
-platform = HostPlatform()
-
-pypowsybl_version = v"1.7.0"
+pypowsybl_version = v"1.12.0"
 
 sources = [
     DirectorySource("./cpp", target="cpp"),
-    GitSource("https://github.com/powsybl/pypowsybl.git", "cd5fea41bbfb2897fd71a6e63b2d07a465055699", "cpp"),
+    GitSource("https://github.com/powsybl/pypowsybl.git", "cfc5f6b15e31d11f1879ba01fbf9e9f8032efd0b", "cpp"),
     ArchiveSource("https://github.com/powsybl/pypowsybl/releases/download/v$(pypowsybl_version)/binaries-v$(pypowsybl_version)-windows.zip",
-                  "82d3cee44992dcceaee7549f17351155e91c9eb2bdce97b1cf6c0107155991e8",
+                  "467d269c52de4a3bcc73dc351f7f777357c5dda0311962b605f7262e3bde639d",
                   "powsybl-java-windows"),
     ArchiveSource("https://github.com/powsybl/pypowsybl/releases/download/v$(pypowsybl_version)/binaries-v$(pypowsybl_version)-linux.zip",
-                  "8832e1ff432e97807dc6dfddb4b001dd2c3c05a7411fc3748c8af3854a3b448c",
+                  "1f9a747255405cc3c4df7dd404fb5d58fc2a9843d7932dde6129d71ab33edac9",
                   "powsybl-java-linux"),
     ArchiveSource("https://github.com/powsybl/pypowsybl/releases/download/v$(pypowsybl_version)/binaries-v$(pypowsybl_version)-darwin.zip",
-                  "d541eb07a334d9272b167cb30f7d846ff109db49ac61a9776593c1aface18324",
+                  "e388a8638fd9834cb6dcf1c63d1189aee380d82e92956aff055757991a0ea409",
                   "powsybl-java-darwin")
 ]
 
@@ -67,5 +63,7 @@ dependencies = [
     Dependency("libjulia_jll")
 ]
 
+platform = Platform("x86_64", "linux"; cxxstring_abi="cxx11", julia_version=v"1.12.3")
+
 build_tarballs(ARGS, name, version, sources, script, [platform], products, dependencies;
-    preferred_gcc_version=v"10", julia_compat="1.6")
+    preferred_gcc_version=v"10")

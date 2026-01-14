@@ -1,0 +1,26 @@
+module LibPowsybl
+  using CxxWrap
+  using Powsybl_jll
+  @wrapmodule(() -> :libPowsyblJlWrap, :define_module_powsybl)
+  function __init__()
+      @initcxx
+      set_java_library_path(dirname(Powsybl_jll.libmath_path))
+      atexit(close)
+  end
+
+  function dict_to_string_string_map(input_dict::Dict{String, String})::LibPowsybl.StringStringMap
+      map = LibPowsybl.StringStringMap()
+      for (key, value) in input_dict
+        LibPowsybl.put_element(map, key, value)
+      end
+      return map
+  end
+
+  function close()
+    close_powsybl()
+  end
+
+  function set_config_read(read_config::Bool = true)
+    set_config_read_internal(read_config)
+  end
+end

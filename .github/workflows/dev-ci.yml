@@ -13,38 +13,51 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        version:
-          - '1' # Leave this line unchanged. '1' will automatically expand to the latest stable 1.x release of Julia.
         os:
           - ubuntu-latest
         arch:
           - x64
+        python-version: ["3.10"]
     steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install pip
+        run: python -m pip install --upgrade pip setuptools wheel
+
+      - name: Install jill for multiple julia version handling
+        run: pip install jill --user -U
+
+      - name: Install julia 1.7 for binary builder build of Powsybl_jll
+        run: jill install --confirm 1.7
+
+      - name: Install julia 1.12.3 as target version for the test suite
+        run: jill install --confirm 1.12.3
+
       - name: Checkout sources
         uses: actions/checkout@v3
         with:
           submodules: true
 
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: '1.10'
-
       - name: Install requirements
         run: |
-          julia install_requirements.jl   
+          julia-1.7 install_requirements.jl   
 
       - name: Build and install Powsybl_jll
         run: |
-          julia build_local.jl --verbose --deploy="local" 
+          julia-1.7 build_local.jl --verbose --deploy="local" 
 
       - name: Setup Powsybl_jll as dev package
         run: |
-          eval "julia -e 'using Pkg; Pkg.REPLMode.PRINTED_REPL_WARNING[] = true; pkg\"dev Powsybl_jll\"'"
+          eval "julia-1.12 -e 'using Pkg; Pkg.REPLMode.PRINTED_REPL_WARNING[] = true; pkg\"dev Powsybl_jll\"'"
 
       - name: Install Powsybl package
         run: |
-          eval "julia -e 'using Pkg; Pkg.REPLMode.PRINTED_REPL_WARNING[] = true; pkg\"dev .\"'"
+          eval "julia-1.12 -e 'using Pkg; Pkg.REPLMode.PRINTED_REPL_WARNING[] = true; pkg\"dev .\"'"
 
       - name: Test Powsybl
         run: |
-          eval "julia -e 'using Pkg; Pkg.REPLMode.PRINTED_REPL_WARNING[] = true; pkg\"test Powsybl\"'"
+          eval "julia-1.12 -e 'using Pkg; Pkg.REPLMode.PRINTED_REPL_WARNING[] = true; pkg\"test Powsybl\"'"

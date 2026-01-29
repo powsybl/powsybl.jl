@@ -9,7 +9,7 @@ using BinaryBuilder, Pkg
 name = "Powsybl"
 version = v"0.2.0"
 
-pypowsybl_version = v"1.12.0"
+pypowsybl_version = v"1.14.0"
 
 sources = [
     DirectorySource("./cpp", target="cpp"),

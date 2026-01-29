@@ -299,7 +299,7 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
     .method_readwrite("balance_type", &pypowsybl::LoadFlowParameters::balance_type)
     .method_readwrite("dc_use_transformer_ratio", &pypowsybl::LoadFlowParameters::dc_use_transformer_ratio)
     .method_readwrite("countries_to_balance", &pypowsybl::LoadFlowParameters::countries_to_balance)
-    .method_readwrite("connected_component_mode", &pypowsybl::LoadFlowParameters::component_mode)
+    .method_readwrite("component_mode", &pypowsybl::LoadFlowParameters::component_mode)
     .method_readwrite("dc_power_factor", &pypowsybl::LoadFlowParameters::dc_power_factor)
     .method_readwrite("provider_parameters_keys", &pypowsybl::LoadFlowParameters::provider_parameters_keys)
     .method_readwrite("provider_parameters_values", &pypowsybl::LoadFlowParameters::provider_parameters_values);

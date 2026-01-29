@@ -54,7 +54,7 @@ end
   @test parameters.balance_type == Powsybl.LoadFlow.PROPORTIONAL_TO_GENERATION_P_MAX
   @test parameters.dc_use_transformer_ratio == true
   @test parameters.countries_to_balance == []
-  @test parameters.connected_component_mode == Powsybl.LoadFlow.MAIN
+  @test parameters.component_mode == Powsybl.LoadFlow.ALL_CONNECTED
   @test parameters.dc_power_factor == 1.0
   @test parameters.provider_parameters == Dict{String, String}()
 end

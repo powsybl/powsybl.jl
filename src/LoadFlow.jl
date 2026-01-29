@@ -27,9 +27,10 @@ module LoadFlow
 
   end
 
-  @enum ConnectedComponentMode begin
-    ALL=LibPowsybl.ALL
-    MAIN=LibPowsybl.MAIN
+  @enum ComponentMode begin
+    MAIN_CONNECTED=LibPowsybl.MAIN_CONNECTED
+    ALL_CONNECTED=LibPowsybl.ALL_CONNECTED
+    MAIN_SYNCHRONOUS=LibPowsybl.MAIN_SYNCHRONOUS
   end
 
   mutable struct LoadFlowParameters
@@ -45,7 +46,7 @@ module LoadFlow
       balance_type::BalanceType
       dc_use_transformer_ratio::Bool
       countries_to_balance::Vector{String}
-      connected_component_mode::ConnectedComponentMode
+      component_mode::ComponentMode
       dc_power_factor::Float64
       provider_parameters::Dict{String, String}
   end
@@ -69,7 +70,7 @@ module LoadFlow
       LibPowsybl.balance_type(c_parameters, LibPowsybl.BalanceType(parameters.balance_type))
       LibPowsybl.dc_use_transformer_ratio(c_parameters, parameters.dc_use_transformer_ratio)
       LibPowsybl.countries_to_balance(c_parameters, StdVector{StdString}(parameters.countries_to_balance))
-      LibPowsybl.connected_component_mode(c_parameters, LibPowsybl.ConnectedComponentMode(parameters.connected_component_mode))
+      LibPowsybl.component_mode(c_parameters, LibPowsybl.ComponentMode(parameters.component_mode))
       LibPowsybl.dc_power_factor(c_parameters, parameters.dc_power_factor)
       LibPowsybl.provider_parameters_keys(c_parameters, StdVector{StdString}(collect(keys(parameters.provider_parameters))))
       LibPowsybl.provider_parameters_values(c_parameters, StdVector{StdString}(collect(values(parameters.provider_parameters))))
@@ -90,7 +91,7 @@ module LoadFlow
         BalanceType(LibPowsybl.balance_type(parameters)),
         LibPowsybl.dc_use_transformer_ratio(parameters),
         LibPowsybl.countries_to_balance(parameters),
-        ConnectedComponentMode(LibPowsybl.connected_component_mode(parameters)),
+        ComponentMode(LibPowsybl.component_mode(parameters)),
         LibPowsybl.dc_power_factor(parameters),
         Dict{String, String}())
   end

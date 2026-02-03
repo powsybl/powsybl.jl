@@ -226,9 +226,10 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.set_const("DC_VALUES", pypowsybl::VoltageInitMode::DC_VALUES);
 
   // ConnectedComponentMode
-  mod.add_bits<pypowsybl::ConnectedComponentMode>("ConnectedComponentMode", jlcxx::julia_type("CppEnum"));
-  mod.set_const("ALL", pypowsybl::ConnectedComponentMode::ALL);
-  mod.set_const("MAIN", pypowsybl::ConnectedComponentMode::MAIN);
+  mod.add_bits<pypowsybl::ComponentMode>("ComponentMode", jlcxx::julia_type("CppEnum"));
+  mod.set_const("MAIN_CONNECTED", pypowsybl::ComponentMode::MAIN_CONNECTED);
+  mod.set_const("ALL_CONNECTED", pypowsybl::ComponentMode::ALL_CONNECTED);
+  mod.set_const("MAIN_SYNCHRONOUS", pypowsybl::ComponentMode::MAIN_SYNCHRONOUS);
 
   // BalanceType
   mod.add_bits<pypowsybl::BalanceType>("BalanceType", jlcxx::julia_type("CppEnum"));
@@ -298,7 +299,7 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
     .method_readwrite("balance_type", &pypowsybl::LoadFlowParameters::balance_type)
     .method_readwrite("dc_use_transformer_ratio", &pypowsybl::LoadFlowParameters::dc_use_transformer_ratio)
     .method_readwrite("countries_to_balance", &pypowsybl::LoadFlowParameters::countries_to_balance)
-    .method_readwrite("connected_component_mode", &pypowsybl::LoadFlowParameters::connected_component_mode)
+    .method_readwrite("component_mode", &pypowsybl::LoadFlowParameters::component_mode)
     .method_readwrite("dc_power_factor", &pypowsybl::LoadFlowParameters::dc_power_factor)
     .method_readwrite("provider_parameters_keys", &pypowsybl::LoadFlowParameters::provider_parameters_keys)
     .method_readwrite("provider_parameters_values", &pypowsybl::LoadFlowParameters::provider_parameters_values);

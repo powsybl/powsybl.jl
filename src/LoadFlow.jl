@@ -47,7 +47,9 @@ module LoadFlow
       dc_use_transformer_ratio::Bool
       countries_to_balance::Vector{String}
       component_mode::ComponentMode
+      hvdc_ac_emulation::Bool
       dc_power_factor::Float64
+      dc::Bool
       provider_parameters::Dict{String, String}
   end
 
@@ -57,7 +59,7 @@ module LoadFlow
   end
 
   function load_flow_parameters_to_c_struct(parameters::LoadFlowParameters)
-      c_parameters = LibPowsybl.LoadFlowParameters()
+      c_parameters = LibPowsybl.default_loadflow_parameters()
       LibPowsybl.voltage_init_mode(c_parameters, LibPowsybl.VoltageInitMode(parameters.voltage_init_mode))
       LibPowsybl.transformer_voltage_control_on(c_parameters, parameters.transformer_voltage_control_on)
       LibPowsybl.use_reactive_limits(c_parameters, parameters.use_reactive_limits)
@@ -71,7 +73,9 @@ module LoadFlow
       LibPowsybl.dc_use_transformer_ratio(c_parameters, parameters.dc_use_transformer_ratio)
       LibPowsybl.countries_to_balance(c_parameters, StdVector{StdString}(parameters.countries_to_balance))
       LibPowsybl.component_mode(c_parameters, LibPowsybl.ComponentMode(parameters.component_mode))
+      LibPowsybl.hvdc_ac_emulation(c_parameters, parameters.hvdc_ac_emulation)
       LibPowsybl.dc_power_factor(c_parameters, parameters.dc_power_factor)
+      LibPowsybl.dc(c_parameters, parameters.dc)
       LibPowsybl.provider_parameters_keys(c_parameters, StdVector{StdString}(collect(keys(parameters.provider_parameters))))
       LibPowsybl.provider_parameters_values(c_parameters, StdVector{StdString}(collect(values(parameters.provider_parameters))))
       return c_parameters
@@ -92,7 +96,9 @@ module LoadFlow
         LibPowsybl.dc_use_transformer_ratio(parameters),
         LibPowsybl.countries_to_balance(parameters),
         ComponentMode(LibPowsybl.component_mode(parameters)),
+        LibPowsybl.hvdc_ac_emulation(parameters),
         LibPowsybl.dc_power_factor(parameters),
+        LibPowsybl.dc(parameters),
         Dict{String, String}())
   end
 
@@ -130,14 +136,24 @@ module LoadFlow
   end
 
   function load_flow_parameters()
-      return c_parameters_to_julia_struct(LibPowsybl.LoadFlowParameters())
+      return c_parameters_to_julia_struct(LibPowsybl.default_loadflow_parameters())
   end
 
+  """
+      run_ac(network, parameters, provider = "")
+
+  Run an AC load flow. The `dc` field of `parameters` is forced to `false`.
+  """
   function run_ac(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "")
       load_flow_c_result = LibPowsybl.run_load_flow(network.handle, load_flow_parameters_to_c_struct(parameters), false, provider)
       return load_flow_results_to_dataframe(load_flow_c_result)
   end
 
+  """
+      run_dc(network, parameters, provider = "")
+
+  Run a DC load flow. The `dc` field of `parameters` is forced to `true`.
+  """
   function run_dc(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "")
       load_flow_c_result = LibPowsybl.run_load_flow(network.handle, load_flow_parameters_to_c_struct(parameters), true, provider)
       return load_flow_results_to_dataframe(load_flow_c_result)

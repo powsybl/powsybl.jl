@@ -312,4 +312,82 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.method("create_loadflow_provider_parameters_series_array", [] (const std::string& provider) {
             return pypowsybl::createLoadFlowProviderParametersSeriesArray(provider);
     }, "Create a parameters series array for a given loadflow provider");
+
+  // Import / export format metadata
+  mod.method("get_network_import_supported_extensions", &pypowsybl::getNetworkImportSupportedExtensions,
+             "Get the file extensions supported for network import");
+
+  mod.method("create_importer_parameters_series_array", [] (const std::string& format) {
+            return pypowsybl::createImporterParametersSeriesArray(format);
+    }, "Create a parameters series array for a given import format");
+
+  mod.method("create_exporter_parameters_series_array", [] (const std::string& format) {
+            return pypowsybl::createExporterParametersSeriesArray(format);
+    }, "Create a parameters series array for a given export format");
+
+  // Variant management
+  mod.method("get_variants_ids", [] (pypowsybl::JavaHandle network) {
+            return pypowsybl::getVariantsIds(network);
+    }, "Get the list of variant ids of a network");
+
+  mod.method("get_working_variant_id", [] (pypowsybl::JavaHandle network) {
+            return pypowsybl::getWorkingVariantId(network);
+    }, "Get the id of the working variant of a network");
+
+  mod.method("clone_variant", [] (pypowsybl::JavaHandle network, std::string src, std::string variant, bool mayOverwrite) {
+            pypowsybl::cloneVariant(network, src, variant, mayOverwrite);
+    }, "Clone a network variant into a new one");
+
+  mod.method("set_working_variant", [] (pypowsybl::JavaHandle network, std::string variant) {
+            pypowsybl::setWorkingVariant(network, variant);
+    }, "Set the working variant of a network");
+
+  mod.method("remove_variant", [] (pypowsybl::JavaHandle network, std::string variant) {
+            pypowsybl::removeVariant(network, variant);
+    }, "Remove a variant from a network");
+
+  // Network mutation
+  mod.method("remove_network_elements", [] (pypowsybl::JavaHandle network, std::vector<std::string> const& elementIds) {
+            pypowsybl::removeNetworkElements(network, elementIds);
+    }, "Remove elements from a network given their ids");
+
+  mod.method("update_switch_position", [] (pypowsybl::JavaHandle network, std::string const& id, bool open) {
+            return pypowsybl::updateSwitchPosition(network, id, open);
+    }, "Open or close a switch, returns true if the state was changed");
+
+  mod.method("update_connectable_status", [] (pypowsybl::JavaHandle network, std::string const& id, bool connected) {
+            return pypowsybl::updateConnectableStatus(network, id, connected);
+    }, "Connect or disconnect a connectable, returns true if the state was changed");
+
+  mod.method("get_network_elements_ids", [] (pypowsybl::JavaHandle network, element_type type,
+                                             std::vector<double> const& nominalVoltages,
+                                             std::vector<std::string> const& countries,
+                                             bool mainCc, bool mainSc, bool notConnectedToSameBusAtBothSides) {
+            return pypowsybl::getNetworkElementsIds(network, type, nominalVoltages, countries, mainCc, mainSc, notConnectedToSameBusAtBothSides);
+    }, "Get the ids of the elements of a given type, with optional filtering");
+
+  // Node/breaker and bus/breaker topology views
+  mod.method("get_node_breaker_view_nodes", [] (pypowsybl::JavaHandle network, std::string voltageLevel) {
+            return pypowsybl::getNodeBreakerViewNodes(network, voltageLevel);
+    }, "Get the node/breaker view nodes of a voltage level");
+
+  mod.method("get_node_breaker_view_switches", [] (pypowsybl::JavaHandle network, std::string voltageLevel) {
+            return pypowsybl::getNodeBreakerViewSwitches(network, voltageLevel);
+    }, "Get the node/breaker view switches of a voltage level");
+
+  mod.method("get_node_breaker_view_internal_connections", [] (pypowsybl::JavaHandle network, std::string voltageLevel) {
+            return pypowsybl::getNodeBreakerViewInternalConnections(network, voltageLevel);
+    }, "Get the node/breaker view internal connections of a voltage level");
+
+  mod.method("get_bus_breaker_view_buses", [] (pypowsybl::JavaHandle network, std::string voltageLevel) {
+            return pypowsybl::getBusBreakerViewBuses(network, voltageLevel);
+    }, "Get the bus/breaker view buses of a voltage level");
+
+  mod.method("get_bus_breaker_view_switches", [] (pypowsybl::JavaHandle network, std::string voltageLevel) {
+            return pypowsybl::getBusBreakerViewSwitches(network, voltageLevel);
+    }, "Get the bus/breaker view switches of a voltage level");
+
+  mod.method("get_bus_breaker_view_elements", [] (pypowsybl::JavaHandle network, std::string voltageLevel) {
+            return pypowsybl::getBusBreakerViewElements(network, voltageLevel);
+    }, "Get the bus/breaker view elements of a voltage level");
 }

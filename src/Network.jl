@@ -227,5 +227,225 @@ module Network
       LibPowsybl.save_network(network.handle, network_file, format, LibPowsybl.dict_to_string_string_map(parameters))
   end
 
+  # ---------------------------------------------------------------------------
+  # Import / export format metadata
+  # ---------------------------------------------------------------------------
+
+  """
+      get_network_import_supported_extensions() -> Vector{String}
+
+  Return the list of file extensions (e.g. `"xiidm"`, `"uct"`, `"raw"`) that can be
+  used to import a network.
+  """
+  function get_network_import_supported_extensions()
+    return [String(extension) for extension in LibPowsybl.get_network_import_supported_extensions()]
+  end
+
+  """
+      get_import_parameters(format::String) -> DataFrame
+
+  Return, as a DataFrame, the parameters supported by a given import `format`
+  (for instance `"CGMES"`, `"PSS/E"`, `"UCTE"`). Each row describes a parameter with
+  its name, description, type, default value and possible values.
+  """
+  function get_import_parameters(format::String)
+    series_array = LibPowsybl.create_importer_parameters_series_array(format)
+    return create_dataframe_from_series_array(series_array[])
+  end
+
+  """
+      get_export_parameters(format::String) -> DataFrame
+
+  Return, as a DataFrame, the parameters supported by a given export `format`.
+  See also [`get_import_parameters`](@ref).
+  """
+  function get_export_parameters(format::String)
+    series_array = LibPowsybl.create_exporter_parameters_series_array(format)
+    return create_dataframe_from_series_array(series_array[])
+  end
+
+  # ---------------------------------------------------------------------------
+  # Variant management
+  # ---------------------------------------------------------------------------
+
+  """
+      get_variants_ids(network::NetworkHandle) -> Vector{String}
+
+  Return the list of variant ids defined on the network. A network always has at
+  least the initial variant.
+  """
+  function get_variants_ids(network::NetworkHandle)
+    return [String(variant_id) for variant_id in LibPowsybl.get_variants_ids(network.handle)]
+  end
+
+  """
+      get_working_variant_id(network::NetworkHandle) -> String
+
+  Return the id of the currently active (working) variant of the network.
+  """
+  function get_working_variant_id(network::NetworkHandle)
+    return String(LibPowsybl.get_working_variant_id(network.handle))
+  end
+
+  """
+      clone_variant(network::NetworkHandle, src::String, variant::String; may_overwrite::Bool = true)
+
+  Create a new variant `variant` by cloning the `src` variant. Cloning a variant lets
+  you run several independent studies (e.g. contingencies) on the same network without
+  altering the base case.
+  """
+  function clone_variant(network::NetworkHandle, src::String, variant::String; may_overwrite::Bool = true)
+    LibPowsybl.clone_variant(network.handle, src, variant, may_overwrite)
+    return nothing
+  end
+
+  """
+      set_working_variant(network::NetworkHandle, variant::String)
+
+  Set the working variant of the network. All subsequent reads and computations operate
+  on this variant.
+  """
+  function set_working_variant(network::NetworkHandle, variant::String)
+    LibPowsybl.set_working_variant(network.handle, variant)
+    return nothing
+  end
+
+  """
+      remove_variant(network::NetworkHandle, variant::String)
+
+  Remove a variant from the network.
+  """
+  function remove_variant(network::NetworkHandle, variant::String)
+    LibPowsybl.remove_variant(network.handle, variant)
+    return nothing
+  end
+
+  # ---------------------------------------------------------------------------
+  # Network mutation
+  # ---------------------------------------------------------------------------
+
+  """
+      remove_elements(network::NetworkHandle, element_ids::Vector{String})
+      remove_elements(network::NetworkHandle, element_id::String)
+
+  Remove one or several elements from the network given their ids.
+  """
+  function remove_elements(network::NetworkHandle, element_ids::Vector{String})
+    LibPowsybl.remove_network_elements(network.handle, StdVector{StdString}(element_ids))
+    return nothing
+  end
+
+  function remove_elements(network::NetworkHandle, element_id::String)
+    return remove_elements(network, [element_id])
+  end
+
+  """
+      update_switch_position(network::NetworkHandle, id::String, open::Bool) -> Bool
+
+  Open (`open = true`) or close (`open = false`) the switch identified by `id`.
+  Return `true` if the switch position was actually changed.
+  """
+  function update_switch_position(network::NetworkHandle, id::String, open::Bool)
+    return LibPowsybl.update_switch_position(network.handle, id, open)
+  end
+
+  """
+      update_connectable_status(network::NetworkHandle, id::String, connected::Bool) -> Bool
+
+  Connect (`connected = true`) or disconnect (`connected = false`) the connectable
+  identified by `id` (a load, generator, line, ...). Return `true` if the status was
+  actually changed.
+  """
+  function update_connectable_status(network::NetworkHandle, id::String, connected::Bool)
+    return LibPowsybl.update_connectable_status(network.handle, id, connected)
+  end
+
+  """
+      get_elements_ids(network, type; nominal_voltages, countries,
+                       main_connected_component, main_synchronous_component,
+                       not_connected_to_same_bus_at_both_sides) -> Vector{String}
+
+  Return the ids of the elements of a given `type` (a `LibPowsybl.ElementType`), with
+  optional filtering by nominal voltage, country and connected/synchronous component.
+  """
+  function get_elements_ids(network::NetworkHandle, type::LibPowsybl.ElementType;
+                            nominal_voltages::Vector{Float64} = Float64[],
+                            countries::Vector{String} = String[],
+                            main_connected_component::Bool = true,
+                            main_synchronous_component::Bool = true,
+                            not_connected_to_same_bus_at_both_sides::Bool = false)
+    ids = LibPowsybl.get_network_elements_ids(network.handle, type,
+                                              StdVector{Float64}(nominal_voltages),
+                                              StdVector{StdString}(countries),
+                                              main_connected_component,
+                                              main_synchronous_component,
+                                              not_connected_to_same_bus_at_both_sides)
+    return [String(element_id) for element_id in ids]
+  end
+
+  # ---------------------------------------------------------------------------
+  # Node/breaker and bus/breaker topology views
+  # ---------------------------------------------------------------------------
+
+  """
+      get_node_breaker_view_nodes(network::NetworkHandle, voltage_level_id::String) -> DataFrame
+
+  Return the nodes of the node/breaker topology view of a voltage level.
+  """
+  function get_node_breaker_view_nodes(network::NetworkHandle, voltage_level_id::String)
+    series_array = LibPowsybl.get_node_breaker_view_nodes(network.handle, voltage_level_id)
+    return create_dataframe_from_series_array(series_array[])
+  end
+
+  """
+      get_node_breaker_view_switches(network::NetworkHandle, voltage_level_id::String) -> DataFrame
+
+  Return the switches of the node/breaker topology view of a voltage level.
+  """
+  function get_node_breaker_view_switches(network::NetworkHandle, voltage_level_id::String)
+    series_array = LibPowsybl.get_node_breaker_view_switches(network.handle, voltage_level_id)
+    return create_dataframe_from_series_array(series_array[])
+  end
+
+  """
+      get_node_breaker_view_internal_connections(network::NetworkHandle, voltage_level_id::String) -> DataFrame
+
+  Return the internal connections of the node/breaker topology view of a voltage level.
+  """
+  function get_node_breaker_view_internal_connections(network::NetworkHandle, voltage_level_id::String)
+    series_array = LibPowsybl.get_node_breaker_view_internal_connections(network.handle, voltage_level_id)
+    return create_dataframe_from_series_array(series_array[])
+  end
+
+  """
+      get_bus_breaker_view_buses(network::NetworkHandle, voltage_level_id::String) -> DataFrame
+
+  Return the buses of the bus/breaker topology view of a voltage level.
+  """
+  function get_bus_breaker_view_buses(network::NetworkHandle, voltage_level_id::String)
+    series_array = LibPowsybl.get_bus_breaker_view_buses(network.handle, voltage_level_id)
+    return create_dataframe_from_series_array(series_array[])
+  end
+
+  """
+      get_bus_breaker_view_switches(network::NetworkHandle, voltage_level_id::String) -> DataFrame
+
+  Return the switches of the bus/breaker topology view of a voltage level.
+  """
+  function get_bus_breaker_view_switches(network::NetworkHandle, voltage_level_id::String)
+    series_array = LibPowsybl.get_bus_breaker_view_switches(network.handle, voltage_level_id)
+    return create_dataframe_from_series_array(series_array[])
+  end
+
+  """
+      get_bus_breaker_view_elements(network::NetworkHandle, voltage_level_id::String) -> DataFrame
+
+  Return the elements connected in the bus/breaker topology view of a voltage level.
+  """
+  function get_bus_breaker_view_elements(network::NetworkHandle, voltage_level_id::String)
+    series_array = LibPowsybl.get_bus_breaker_view_elements(network.handle, voltage_level_id)
+    return create_dataframe_from_series_array(series_array[])
+  end
+
   include("NetworkCreationUtils.jl")
 end

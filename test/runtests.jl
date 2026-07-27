@@ -86,3 +86,88 @@ end
   result = Powsybl.LoadFlow.run_dc(network, parameters)
   @test size(result.component_results, 1) == 1
 end
+
+@testset "Test version table" begin
+  table = Powsybl.get_version_table()
+  @test table isa String
+  @test !isempty(table)
+end
+
+@testset "Test import/export format metadata" begin
+  extensions = Powsybl.Network.get_network_import_supported_extensions()
+  @test extensions isa Vector{String}
+  @test !isempty(extensions)
+
+  cgmes_import = Powsybl.Network.get_import_parameters("CGMES")
+  @test size(cgmes_import, 2) >= 1
+
+  xiidm_export = Powsybl.Network.get_export_parameters("XIIDM")
+  @test size(xiidm_export, 2) >= 1
+end
+
+@testset "Test variant management" begin
+  network = Powsybl.Network.create_ieee9()
+
+  variants = Powsybl.Network.get_variants_ids(network)
+  @test length(variants) == 1
+
+  initial = Powsybl.Network.get_working_variant_id(network)
+  @test initial in variants
+
+  Powsybl.Network.clone_variant(network, initial, "my_variant")
+  @test "my_variant" in Powsybl.Network.get_variants_ids(network)
+
+  Powsybl.Network.set_working_variant(network, "my_variant")
+  @test Powsybl.Network.get_working_variant_id(network) == "my_variant"
+
+  Powsybl.Network.set_working_variant(network, initial)
+  Powsybl.Network.remove_variant(network, "my_variant")
+  @test !("my_variant" in Powsybl.Network.get_variants_ids(network))
+end
+
+@testset "Test network mutation" begin
+  network = Powsybl.Network.create_ieee9()
+
+  loads_before = Powsybl.Network.get_loads(network)
+  n_before = size(loads_before, 1)
+  @test n_before > 0
+
+  a_load = loads_before[1, "id"]
+  Powsybl.Network.remove_elements(network, a_load)
+  @test size(Powsybl.Network.get_loads(network), 1) == n_before - 1
+
+  generator_ids = Powsybl.Network.get_elements_ids(network, Powsybl.LibPowsybl.GENERATOR)
+  @test generator_ids isa Vector{String}
+  @test !isempty(generator_ids)
+end
+
+@testset "Test bus/breaker view" begin
+  network = Powsybl.Network.create_ieee9()
+  voltage_levels = Powsybl.Network.get_voltage_levels(network)
+  vl_id = voltage_levels[1, "id"]
+
+  buses = Powsybl.Network.get_bus_breaker_view_buses(network, vl_id)
+  @test size(buses, 1) >= 1
+
+  Powsybl.Network.get_bus_breaker_view_switches(network, vl_id)
+  Powsybl.Network.get_bus_breaker_view_elements(network, vl_id)
+end
+
+@testset "Test node/breaker view and connectable status" begin
+  network = Powsybl.Network.create_four_substations_node_breaker()
+  voltage_levels = Powsybl.Network.get_voltage_levels(network)
+  vl_id = voltage_levels[1, "id"]
+
+  nodes = Powsybl.Network.get_node_breaker_view_nodes(network, vl_id)
+  @test size(nodes, 1) >= 1
+
+  Powsybl.Network.get_node_breaker_view_switches(network, vl_id)
+  Powsybl.Network.get_node_breaker_view_internal_connections(network, vl_id)
+
+  loads = Powsybl.Network.get_loads(network)
+  if size(loads, 1) > 0
+    load_id = loads[1, "id"]
+    @test Powsybl.Network.update_connectable_status(network, load_id, false) isa Bool
+    @test Powsybl.Network.update_connectable_status(network, load_id, true) isa Bool
+  end
+end

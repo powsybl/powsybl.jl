@@ -109,7 +109,7 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.set_const("SHUNT_COMPENSATOR", element_type::SHUNT_COMPENSATOR);
   mod.set_const("NON_LINEAR_SHUNT_COMPENSATOR_SECTION", element_type::NON_LINEAR_SHUNT_COMPENSATOR_SECTION);
   mod.set_const("LINEAR_SHUNT_COMPENSATOR_SECTION", element_type::LINEAR_SHUNT_COMPENSATOR_SECTION);
-  mod.set_const("DANGLING_LINE", element_type::DANGLING_LINE);
+  mod.set_const("BOUNDARY_LINE", element_type::BOUNDARY_LINE);
   mod.set_const("TIE_LINE", element_type::TIE_LINE);
   mod.set_const("LCC_CONVERTER_STATION", element_type::LCC_CONVERTER_STATION);
   mod.set_const("VSC_CONVERTER_STATION", element_type::VSC_CONVERTER_STATION);
@@ -282,10 +282,6 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
           });
 
   CustomMapper<pypowsybl::LoadFlowParameters> lfParametersMapper(mod, "LoadFlowParameters");
-  lfParametersMapper.jlcxx_wrapper()
-     .constructor([] () {
-       return pypowsybl::createLoadFlowParameters();
-    });
   lfParametersMapper
     .method_readwrite("voltage_init_mode", &pypowsybl::LoadFlowParameters::voltage_init_mode)
     .method_readwrite("transformer_voltage_control_on", &pypowsybl::LoadFlowParameters::transformer_voltage_control_on)
@@ -304,8 +300,15 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
     .method_readwrite("provider_parameters_keys", &pypowsybl::LoadFlowParameters::provider_parameters_keys)
     .method_readwrite("provider_parameters_values", &pypowsybl::LoadFlowParameters::provider_parameters_values);
 
+  mod.method("default_loadflow_parameters", [] () {
+                std::shared_ptr<pypowsybl::LoadFlowParameters> parameters(pypowsybl::createLoadFlowParameters());
+                return *parameters;
+    }, "Get a LoadFlowParameters filled with the provider defaults");
+
   mod.method("run_load_flow", [] (const pypowsybl::JavaHandle& network, const pypowsybl::LoadFlowParameters& parameters, bool dc, const std::string& provider) {
-                pypowsybl::LoadFlowComponentResultArray* results = pypowsybl::runLoadFlow(network, dc, parameters, provider, nullptr);
+                pypowsybl::LoadFlowParameters dcParameters = parameters;
+                dcParameters.dc = dc;
+                pypowsybl::LoadFlowComponentResultArray* results = pypowsybl::runLoadFlow(network, dcParameters, provider, nullptr);
                 return powsybl_array_to_julia(results);
       }, "Run and AC load flow");
 

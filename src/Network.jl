@@ -96,8 +96,15 @@ module Network
     return get_elements(network, LibPowsybl.LINEAR_SHUNT_COMPENSATOR_SECTION, all_attributes, attributes)
   end
 
+  function get_boundary_lines(network::NetworkHandle, all_attributes::Bool = false, attributes::Vector{String} = Vector{String}())
+    return get_elements(network, LibPowsybl.BOUNDARY_LINE, all_attributes, attributes)
+  end
+
+  # Deprecated: dangling lines are now called boundary lines. Kept as an alias for backward
+  # compatibility; use get_boundary_lines instead.
   function get_dangling_lines(network::NetworkHandle, all_attributes::Bool = false, attributes::Vector{String} = Vector{String}())
-    return get_elements(network, LibPowsybl.DANGLING_LINE, all_attributes, attributes)
+    Base.depwarn("get_dangling_lines is deprecated, use get_boundary_lines instead.", :get_dangling_lines)
+    return get_boundary_lines(network, all_attributes, attributes)
   end
 
   function get_tie_lines(network::NetworkHandle, all_attributes::Bool = false, attributes::Vector{String} = Vector{String}())

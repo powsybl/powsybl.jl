@@ -57,7 +57,7 @@ module LoadFlow
   end
 
   function load_flow_parameters_to_c_struct(parameters::LoadFlowParameters)
-      c_parameters = LibPowsybl.LoadFlowParameters()
+      c_parameters = LibPowsybl.default_loadflow_parameters()
       LibPowsybl.voltage_init_mode(c_parameters, LibPowsybl.VoltageInitMode(parameters.voltage_init_mode))
       LibPowsybl.transformer_voltage_control_on(c_parameters, parameters.transformer_voltage_control_on)
       LibPowsybl.use_reactive_limits(c_parameters, parameters.use_reactive_limits)
@@ -130,7 +130,7 @@ module LoadFlow
   end
 
   function load_flow_parameters()
-      return c_parameters_to_julia_struct(LibPowsybl.LoadFlowParameters())
+      return c_parameters_to_julia_struct(LibPowsybl.default_loadflow_parameters())
   end
 
   function run_ac(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "")

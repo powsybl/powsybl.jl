@@ -22,6 +22,10 @@ Some examples are available in the Test directory of this project. For the time 
 * Create a set of tutorial example networks such as IEEE, Eurostag and more 
 * Load a network from a file, supporting CGMES, UCTE, XIIDM, BIIDM, JIIDM, Matpower, IEEE CDF, PSS/E and PowerFactory data format
 * List network elements and explore their attributes through julia DataFrames
+* Inspect substation topology through the node/breaker and bus/breaker views
+* Manage network variants (clone / switch / remove) to run independent study cases
+* Mutate the network: remove elements, connect/disconnect connectables, open/close switches
+* Discover the parameters supported by each import/export format
 
 ### Network exploration
 
@@ -174,6 +178,84 @@ julia> Powsybl.Network.save(network, "Ouput.xiidm", "XIIDM", Dict("iidm.export.x
 ```
 
 See the [documentation](https://powsybl.readthedocs.io/projects/powsybl-core/en/v6.5.1/grid_exchange_formats/index.html) for available export parameters.
+
+### Topology views
+
+Beyond the flat element tables, the substation-level topology of a voltage level can be
+explored through its node/breaker and bus/breaker views:
+
+```julia
+julia> network = Powsybl.Network.create_four_substations_node_breaker()
+
+julia> Powsybl.Network.get_node_breaker_view_nodes(network, "S1VL1")
+julia> Powsybl.Network.get_node_breaker_view_switches(network, "S1VL1")
+julia> Powsybl.Network.get_node_breaker_view_internal_connections(network, "S1VL1")
+
+julia> network = Powsybl.Network.create_ieee9()
+julia> Powsybl.Network.get_bus_breaker_view_buses(network, "VL1")
+julia> Powsybl.Network.get_bus_breaker_view_switches(network, "VL1")
+julia> Powsybl.Network.get_bus_breaker_view_elements(network, "VL1")
+```
+
+### Variants
+
+A network can hold several variants, allowing independent study cases (contingencies,
+what-if analyses) to be run without altering the base case:
+
+```julia
+julia> network = Powsybl.Network.create_ieee9()
+
+julia> initial = Powsybl.Network.get_working_variant_id(network)  # "InitialState"
+
+julia> Powsybl.Network.clone_variant(network, initial, "contingency_1")
+julia> Powsybl.Network.set_working_variant(network, "contingency_1")
+julia> Powsybl.Network.get_variants_ids(network)
+
+# ... run computations on the variant ...
+
+julia> Powsybl.Network.set_working_variant(network, initial)
+julia> Powsybl.Network.remove_variant(network, "contingency_1")
+```
+
+### Network mutation
+
+The network model can be edited: elements removed, connectables connected/disconnected,
+and switches opened/closed.
+
+```julia
+julia> network = Powsybl.Network.create_ieee9()
+
+# Remove one or several elements by id
+julia> Powsybl.Network.remove_elements(network, "L7-8-0")
+julia> Powsybl.Network.remove_elements(network, ["L9-8-0", "L7-5-0"])
+
+# Connect / disconnect a connectable (returns true if the state changed)
+julia> Powsybl.Network.update_connectable_status(network, "LOAD-1", false)
+
+# Open / close a switch (returns true if the state changed)
+julia> Powsybl.Network.update_switch_position(network, "SWITCH-1", true)
+
+# Query element ids, with optional filtering
+julia> Powsybl.Network.get_elements_ids(network, Powsybl.LibPowsybl.GENERATOR)
+```
+
+### Import / export parameters
+
+Each import and export format supports a set of parameters. They can be discovered
+programmatically:
+
+```julia
+julia> Powsybl.Network.get_network_import_supported_extensions()
+
+julia> Powsybl.Network.get_import_parameters("PSS/E")
+julia> Powsybl.Network.get_export_parameters("XIIDM")
+```
+
+### Version information
+
+```julia
+julia> print(Powsybl.get_version_table())
+```
 
 ### Network extensions
 

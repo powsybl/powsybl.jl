@@ -8,4 +8,15 @@ module Powsybl
   include("LibPowsybl.jl")
   include("Network.jl")
   include("LoadFlow.jl")
+
+  """
+      get_version_table() -> String
+
+  Return an ASCII table listing the versions of all the underlying PowSyBl modules
+  bundled in `Powsybl_jll`. Useful to report the exact PowSyBl core / provider versions
+  in use when filing an issue.
+  """
+  function get_version_table()
+    return String(LibPowsybl.get_version_table())
+  end
 end

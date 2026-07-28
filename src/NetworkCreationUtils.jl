@@ -14,7 +14,7 @@ function _create_network(name::String, network_id::String = "")
     LibPowsybl.case_date(handle))
 end
 
-function create_empty(network_id::String = "")
+function create_empty(network_id::String = "Default")
   return _create_network("empty", network_id)
 end
 

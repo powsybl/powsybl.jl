@@ -27,7 +27,7 @@ include_directories(${Julia_INCLUDE_DIRS} ${POWSYBL_CPP_INCLUDE_DIR})
 link_directories(${POWSYBL_INSTALL_DIR}/lib)
 
 add_library(PowsyblJlWrap SHARED powsybl_jl.cpp)
-target_link_libraries(PowsyblJlWrap PUBLIC JlCxx::cxxwrap_julia JlCxx::cxxwrap_julia_stl powsybl-cpp)
+target_link_libraries(PowsyblJlWrap PUBLIC JlCxx::cxxwrap_julia JlCxx::cxxwrap_julia_stl powsybl-cpp pypowsybl-java)
 set_property(TARGET PowsyblJlWrap PROPERTY CXX_STANDARD 17)
 
 install(TARGETS PowsyblJlWrap)

@@ -342,3 +342,37 @@ julia> network2 = Powsybl.Network.load("case.xiidm"; report_node = report_node)
 julia> print(report_node)
 julia> Powsybl.Report.to_json(report_node)
 ```
+
+### Java logs and stack traces
+
+PowSyBl's own (Java) logs — including stack traces at the finer levels — go through the
+standard Julia logging system, like any other message. There is no level to set: PowSyBl's
+verbosity follows the active logger, so lowering that logger's minimum level is all it
+takes to see more detail.
+
+```julia
+julia> using Powsybl, Logging
+
+julia> network = Powsybl.Network.create_ieee9()
+julia> parameters = Powsybl.LoadFlow.load_flow_parameters()
+
+julia> with_logger(ConsoleLogger(stderr, Logging.Debug)) do
+           Powsybl.LoadFlow.run_ac(network, parameters)
+       end
+┌ Info: Version: ...
+│   java_logger_name = "com.powsybl.openloadflow.OpenLoadFlowProvider"
+└ @ Powsybl.Log ...
+┌ Debug: Start AC load flow on ...
+│   java_logger_name = "com.powsybl.openloadflow.ac.AcloadFlowEngine"
+└ @ Powsybl.Log ...
+```
+
+Each message carries the originating Java logger name, its Java timestamp and its original
+PowSyBl level as `java_logger_name`, `java_timestamp` and `java_level`, and belongs to the
+`:powsybl` log group, so a custom logger can filter on any of them. PowSyBl TRACE and DEBUG
+messages are both emitted at `Logging.Debug`, since Julia discards anything below it;
+to ask PowSyBl for TRACE detail, use a logger whose minimum level is below `Logging.Debug`.
+
+To send the messages somewhere fixed regardless of the active logger, use
+`Powsybl.Log.set_logger(logger)` (and `Powsybl.Log.set_logger(nothing)` to restore the
+default).

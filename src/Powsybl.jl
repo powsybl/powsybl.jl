@@ -6,6 +6,7 @@
 
 module Powsybl
   include("LibPowsybl.jl")
+  include("Log.jl")
   include("Report.jl")
   include("Network.jl")
   include("LoadFlow.jl")

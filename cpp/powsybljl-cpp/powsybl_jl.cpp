@@ -10,6 +10,8 @@
 #include <memory>
 #include <iostream>
 #include <thread>
+#include <mutex>
+#include <vector>
 
 #include "jlcxx/jlcxx.hpp"
 #include "powsybl-cpp.h"
@@ -22,8 +24,32 @@ template <> struct jlcxx::IsMirroredType<slack_bus_result> : std::false_type {};
 
 using StringStringMap = std::map<std::string, std::string>;
 
+static const char LOG_FIELD_SEPARATOR = '\x1f';
+static const size_t MAX_BUFFERED_LOG_RECORDS = 100000;
+
+struct JavaLogRecord {
+  int level;
+  long timestamp;
+  std::string logger;
+  std::string message;
+};
+
+static std::mutex g_logMutex;
+static std::vector<JavaLogRecord> g_logRecords;
+static size_t g_droppedLogRecords = 0;
+// Log level requested from Julia, re-applied before every Java call so it survives.
+static bool g_logLevelConfigured = false;
+static int g_logLevel = 20;
+
 void logFromJava(int level, long timestamp, char* loggerName, char* message) {
-  //TODO Redirect log properly to julia logger
+  std::lock_guard<std::mutex> lock(g_logMutex);
+  if (g_logRecords.size() >= MAX_BUFFERED_LOG_RECORDS) {
+    ++g_droppedLogRecords;
+    return;
+  }
+  g_logRecords.push_back({level, timestamp,
+                          loggerName ? std::string(loggerName) : std::string(),
+                          message ? std::string(message) : std::string()});
 }
 
 // Template lambda returning an attribute of a class instance
@@ -138,7 +164,13 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.set_const("DEFAULT_ATTRIBUTES", filter_attributes_type::DEFAULT_ATTRIBUTES);
   mod.set_const("SELECTION_ATTRIBUTES", filter_attributes_type::SELECTION_ATTRIBUTES);
 
-  auto preJavaCall = [](pypowsybl::GraalVmGuard* guard, exception_handler* exc){ };
+  auto preJavaCall = [](pypowsybl::GraalVmGuard* guard, exception_handler* exc){
+    // Re-apply the requested log level before each Java call so it keeps effect, the same
+    // way pypowsybl drives it from the Python logger level.
+    if (g_logLevelConfigured) {
+      ::setLogLevel(guard->thread(), g_logLevel, exc);
+    }
+  };
   auto postJavaCall = [](){ };
   pypowsybl::init(preJavaCall, postJavaCall);
   auto fptr = &::logFromJava;
@@ -344,4 +376,35 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
             pypowsybl::LoadFlowComponentResultArray* results = pypowsybl::runLoadFlow(network, dcParameters, provider, &reportNode);
             return powsybl_array_to_julia(results);
     }, "Run a load flow, collecting logs into a report node");
+
+  // Java logging. The level is only recorded here; preJavaCall applies it before the next
+  // Java call.
+  mod.method("set_log_level_value", [] (int level) {
+            g_logLevel = level;
+            g_logLevelConfigured = true;
+    }, "Record the PowSyBl (Java) log level to apply on the next Java call");
+
+  mod.method("drain_java_log_records", [] () {
+            std::vector<JavaLogRecord> records;
+            size_t dropped = 0;
+            {
+              std::lock_guard<std::mutex> lock(g_logMutex);
+              records.swap(g_logRecords);
+              dropped = g_droppedLogRecords;
+              g_droppedLogRecords = 0;
+            }
+            std::vector<std::string> encoded;
+            encoded.reserve(records.size() + (dropped > 0 ? 1 : 0));
+            if (dropped > 0) {
+              encoded.push_back(std::string("30") + LOG_FIELD_SEPARATOR + "0" + LOG_FIELD_SEPARATOR
+                                + "com.powsybl.jl" + LOG_FIELD_SEPARATOR
+                                + std::to_string(dropped) + " PowSyBl log message(s) dropped, buffer is full");
+            }
+            for (const JavaLogRecord& record : records) {
+              encoded.push_back(std::to_string(record.level) + LOG_FIELD_SEPARATOR
+                                + std::to_string(record.timestamp) + LOG_FIELD_SEPARATOR
+                                + record.logger + LOG_FIELD_SEPARATOR + record.message);
+            }
+            return encoded;
+    }, "Take the Java log records collected so far, as level/timestamp/logger/message records");
 }

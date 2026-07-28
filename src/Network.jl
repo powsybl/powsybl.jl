@@ -6,6 +6,7 @@
 
 module Network
   using ..LibPowsybl
+  using ..Log
   using ..Report
   using CxxWrap
   using DataFrames
@@ -53,7 +54,9 @@ module Network
     if all_attributes && !isempty(attributes)
       throw("parameters \"all_attributes\" and \"attributes\" are mutually exclusive")
     end
-    series_array = LibPowsybl.create_network_elements_series_array(network.handle, type, StdVector{StdString}(attributes), filter_attributes, per_unit, nominal_apparent_power)
+    series_array = Log.with_java_logs() do
+      LibPowsybl.create_network_elements_series_array(network.handle, type, StdVector{StdString}(attributes), filter_attributes, per_unit, nominal_apparent_power)
+    end
     return create_dataframe_from_series_array(series_array[])
   end
 
@@ -226,9 +229,11 @@ module Network
                 report_node::Union{Nothing, Report.ReportNode} = nothing)::NetworkHandle
       c_parameters = LibPowsybl.dict_to_string_string_map(parameters)
       c_post_processors = StdVector{StdString}(postProcessors)
-      handle = report_node === nothing ?
-        LibPowsybl.load(network_file, c_parameters, c_post_processors) :
-        LibPowsybl.load(network_file, c_parameters, c_post_processors, report_node.handle)
+      handle = Log.with_java_logs() do
+        report_node === nothing ?
+          LibPowsybl.load(network_file, c_parameters, c_post_processors) :
+          LibPowsybl.load(network_file, c_parameters, c_post_processors, report_node.handle)
+      end
     return NetworkHandle(handle,
         LibPowsybl.id(handle),
         LibPowsybl.name(handle),
@@ -238,7 +243,9 @@ module Network
   end
 
   function save(network::NetworkHandle, network_file::String, format::String, parameters::Dict{String, String} = Dict{String, String}())
-      LibPowsybl.save_network(network.handle, network_file, format, LibPowsybl.dict_to_string_string_map(parameters))
+      Log.with_java_logs() do
+        LibPowsybl.save_network(network.handle, network_file, format, LibPowsybl.dict_to_string_string_map(parameters))
+      end
   end
 
   include("NetworkCreationUtils.jl")

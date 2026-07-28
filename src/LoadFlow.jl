@@ -1,6 +1,7 @@
 module LoadFlow
   using ..LibPowsybl
   using ..Network
+  using ..Report
   using DataFrames
   using CxxWrap
 
@@ -139,24 +140,35 @@ module LoadFlow
       return c_parameters_to_julia_struct(LibPowsybl.default_loadflow_parameters())
   end
 
-  """
-      run_ac(network, parameters, provider = "")
-
-  Run an AC load flow. The `dc` field of `parameters` is forced to `false`.
-  """
-  function run_ac(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "")
-      load_flow_c_result = LibPowsybl.run_load_flow(network.handle, load_flow_parameters_to_c_struct(parameters), false, provider)
-      return load_flow_results_to_dataframe(load_flow_c_result)
+  function _run(network::Network.NetworkHandle, parameters::LoadFlowParameters, dc::Bool, provider::String,
+                report_node::Union{Nothing, Report.ReportNode})
+      c_parameters = load_flow_parameters_to_c_struct(parameters)
+      c_result = report_node === nothing ?
+        LibPowsybl.run_load_flow(network.handle, c_parameters, dc, provider) :
+        LibPowsybl.run_load_flow(network.handle, c_parameters, dc, provider, report_node.handle)
+      return load_flow_results_to_dataframe(c_result)
   end
 
   """
-      run_dc(network, parameters, provider = "")
+      run_ac(network, parameters, provider = ""; report_node = nothing)
 
-  Run a DC load flow. The `dc` field of `parameters` is forced to `true`.
+  Run an AC load flow. The `dc` field of `parameters` is forced to `false`. Pass a
+  `report_node` to collect the functional logs of the run.
   """
-  function run_dc(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "")
-      load_flow_c_result = LibPowsybl.run_load_flow(network.handle, load_flow_parameters_to_c_struct(parameters), true, provider)
-      return load_flow_results_to_dataframe(load_flow_c_result)
+  function run_ac(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "";
+                  report_node::Union{Nothing, Report.ReportNode} = nothing)
+      return _run(network, parameters, false, provider, report_node)
+  end
+
+  """
+      run_dc(network, parameters, provider = ""; report_node = nothing)
+
+  Run a DC load flow. The `dc` field of `parameters` is forced to `true`. Pass a
+  `report_node` to collect the functional logs of the run.
+  """
+  function run_dc(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "";
+                  report_node::Union{Nothing, Report.ReportNode} = nothing)
+      return _run(network, parameters, true, provider, report_node)
   end
 
   function get_provider_parameters(provider::String = "")

@@ -1,6 +1,7 @@
 module LoadFlow
   using ..LibPowsybl
   using ..Network
+  using ..Report
   using DataFrames
   using CxxWrap
 
@@ -133,14 +134,23 @@ module LoadFlow
       return c_parameters_to_julia_struct(LibPowsybl.default_loadflow_parameters())
   end
 
-  function run_ac(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "")
-      load_flow_c_result = LibPowsybl.run_load_flow(network.handle, load_flow_parameters_to_c_struct(parameters), false, provider)
-      return load_flow_results_to_dataframe(load_flow_c_result)
+  function _run(network::Network.NetworkHandle, parameters::LoadFlowParameters, dc::Bool, provider::String,
+                report_node::Union{Nothing, Report.ReportNode})
+      c_parameters = load_flow_parameters_to_c_struct(parameters)
+      c_result = report_node === nothing ?
+        LibPowsybl.run_load_flow(network.handle, c_parameters, dc, provider) :
+        LibPowsybl.run_load_flow(network.handle, c_parameters, dc, provider, report_node.handle)
+      return load_flow_results_to_dataframe(c_result)
   end
 
-  function run_dc(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "")
-      load_flow_c_result = LibPowsybl.run_load_flow(network.handle, load_flow_parameters_to_c_struct(parameters), true, provider)
-      return load_flow_results_to_dataframe(load_flow_c_result)
+  function run_ac(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "";
+                  report_node::Union{Nothing, Report.ReportNode} = nothing)
+      return _run(network, parameters, false, provider, report_node)
+  end
+
+  function run_dc(network::Network.NetworkHandle, parameters::LoadFlowParameters, provider::String = "";
+                  report_node::Union{Nothing, Report.ReportNode} = nothing)
+      return _run(network, parameters, true, provider, report_node)
   end
 
   function get_provider_parameters(provider::String = "")

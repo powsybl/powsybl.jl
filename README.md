@@ -341,4 +341,72 @@ julia> network2 = Powsybl.Network.load("case.xiidm"; report_node = report_node)
 # Render it as text (also shown when the report node is displayed) or as JSON
 julia> print(report_node)
 julia> Powsybl.Report.to_json(report_node)
+
+### Security analysis module
+
+A security analysis checks a network against a set of contingencies (element outages)
+and reports the resulting limit violations. It is driven through the `SecurityAnalysis`
+submodule.
+
+```julia
+julia> using Powsybl
+
+julia> network = Powsybl.Network.create_ieee9()
+
+# Build a security analysis context: declare contingencies and monitored elements
+julia> analysis = Powsybl.SecurityAnalysis.create_analysis()
+julia> Powsybl.SecurityAnalysis.add_single_element_contingency(analysis, "L7-8-0")
+julia> Powsybl.SecurityAnalysis.add_multiple_elements_contingency(analysis, ["L9-8-0", "L7-5-0"], "double")
+julia> Powsybl.SecurityAnalysis.add_monitored_elements(analysis; branch_ids = ["L9-6-0"])
+
+# Run it (AC here, run_dc is also available). The load flow parameters are optional.
+julia> parameters = Powsybl.LoadFlow.load_flow_parameters()
+julia> result = Powsybl.SecurityAnalysis.run_ac(analysis, network, parameters)
+```
+
+The result exposes the computation status of the base case and of each contingency, the
+limit violations, and the detailed results on the monitored elements:
+
+```julia
+julia> Powsybl.SecurityAnalysis.get_pre_contingency_result(result)
+CONVERGED::ComputationStatus = 0
+
+julia> Powsybl.SecurityAnalysis.get_post_contingency_results(result)
+2×2 DataFrame
+ Row │ contingency_id  status
+     │ String          Computa…
+─────┼──────────────────────────
+   1 │ L7-8-0          CONVERGED
+   2 │ double          CONVERGED
+
+julia> Powsybl.SecurityAnalysis.get_limit_violations(result)
+julia> Powsybl.SecurityAnalysis.get_branch_results(result)
+julia> Powsybl.SecurityAnalysis.get_bus_results(result)
+julia> Powsybl.SecurityAnalysis.get_three_windings_transformer_results(result)
+```
+
+Contingencies can be built one element at a time (`add_single_element_contingency`), as
+simultaneous multi-element outages (`add_multiple_elements_contingency`), or in bulk
+(`add_single_element_contingencies`). Monitored elements accept a
+`contingency_context_type` (`ALL`, `NONE`, `SPECIFIC`, `ONLY_CONTINGENCIES`) to select
+the states in which they are observed, with
+`add_precontingency_monitored_elements` and `add_postcontingency_monitored_elements` as
+shorthands for the base case and for named contingencies.
+
+`run_ac` and `run_dc` accept either the load flow parameters alone, or the full security
+analysis parameters: the load flow parameters, the thresholds deciding when a violation
+counts as increased with respect to the base case, and the parameters of the provider.
+
+```julia
+julia> parameters = Powsybl.SecurityAnalysis.Parameters()
+julia> parameters.increased_violations.flow_proportional_threshold = 0.2
+julia> parameters.provider_parameters["someProviderParameter"] = "value"
+julia> result = Powsybl.SecurityAnalysis.run_ac(analysis, network, parameters)
+```
+
+The names accepted by `provider_parameters` are listed by
+`get_provider_parameters_names`. The provider used when `run_ac` is given none is read
+from `get_default_provider` and can be changed with `set_default_provider`; the available
+ones are listed by `get_provider_names`. A single contingency can be looked up in the
+result with `find_post_contingency_result`.
 ```

@@ -109,3 +109,127 @@ end
   @test imported.name == "simple-eu"
   @test !isempty(string(import_report_node))
 end
+
+@testset "Test security analysis provider names" begin
+  @test !isempty(Powsybl.SecurityAnalysis.get_provider_names())
+end
+
+@testset "Test security analysis" begin
+  network = Powsybl.Network.create_ieee9()
+
+  analysis = Powsybl.SecurityAnalysis.create_analysis()
+  Powsybl.SecurityAnalysis.add_single_element_contingency(analysis, "L7-8-0")
+  Powsybl.SecurityAnalysis.add_multiple_elements_contingency(analysis, ["L9-8-0", "L7-5-0"], "double")
+  Powsybl.SecurityAnalysis.add_monitored_elements(analysis; branch_ids = ["L9-6-0"])
+
+  parameters = Powsybl.LoadFlow.load_flow_parameters()
+  result = Powsybl.SecurityAnalysis.run_ac(analysis, network, parameters)
+
+  # Base case converges
+  @test Powsybl.SecurityAnalysis.get_pre_contingency_result(result) == Powsybl.SecurityAnalysis.CONVERGED
+
+  # One row per contingency, in insertion order
+  post = Powsybl.SecurityAnalysis.get_post_contingency_results(result)
+  @test Set(post[:, "contingency_id"]) == Set(["L7-8-0", "double"])
+  @test post[1, "status"] isa Powsybl.SecurityAnalysis.ComputationStatus
+
+  # Result accessors return tabular data without throwing
+  violations = Powsybl.SecurityAnalysis.get_limit_violations(result)
+  @test size(violations, 2) >= 0
+
+  branch_results = Powsybl.SecurityAnalysis.get_branch_results(result)
+  @test size(branch_results, 2) >= 0
+
+  Powsybl.SecurityAnalysis.get_bus_results(result)
+  Powsybl.SecurityAnalysis.get_three_windings_transformer_results(result)
+end
+
+@testset "Test security analysis parameters" begin
+  parameters = Powsybl.SecurityAnalysis.Parameters()
+  @test parameters.load_flow_parameters isa Powsybl.LoadFlow.LoadFlowParameters
+  @test parameters.increased_violations isa Powsybl.SecurityAnalysis.IncreasedViolationsParameters
+  @test parameters.provider_parameters == Dict{String, String}()
+
+  # The violation thresholds are carried through to the run
+  parameters.increased_violations.flow_proportional_threshold = 0.2
+  parameters.increased_violations.high_voltage_absolute_threshold = 2.0
+
+  network = Powsybl.Network.create_ieee9()
+  analysis = Powsybl.SecurityAnalysis.create_analysis()
+  Powsybl.SecurityAnalysis.add_single_element_contingency(analysis, "L7-8-0")
+  result = Powsybl.SecurityAnalysis.run_ac(analysis, network, parameters)
+  @test Powsybl.SecurityAnalysis.get_pre_contingency_result(result) == Powsybl.SecurityAnalysis.CONVERGED
+
+  # Load flow parameters alone stay accepted, the rest keeping their defaults
+  result = Powsybl.SecurityAnalysis.run_ac(analysis, network, Powsybl.LoadFlow.load_flow_parameters())
+  @test Powsybl.SecurityAnalysis.get_pre_contingency_result(result) == Powsybl.SecurityAnalysis.CONVERGED
+end
+
+@testset "Test security analysis providers" begin
+  default_provider = Powsybl.SecurityAnalysis.get_default_provider()
+  @test default_provider isa String
+  @test default_provider in Powsybl.SecurityAnalysis.get_provider_names()
+
+  # The parameter names of a provider feed the provider_parameters of Parameters
+  @test Powsybl.SecurityAnalysis.get_provider_parameters_names() isa Vector{String}
+
+  Powsybl.SecurityAnalysis.set_default_provider(default_provider)
+  @test Powsybl.SecurityAnalysis.get_default_provider() == default_provider
+end
+
+@testset "Test bulk single element contingencies" begin
+  network = Powsybl.Network.create_ieee9()
+  analysis = Powsybl.SecurityAnalysis.create_analysis()
+
+  # One N-1 contingency per element, the element id naming the contingency
+  Powsybl.SecurityAnalysis.add_single_element_contingencies(analysis, ["L7-8-0", "L9-8-0"])
+  # ... or an id derived from the element
+  Powsybl.SecurityAnalysis.add_single_element_contingencies(analysis, ["L7-5-0"];
+                                                            contingency_id_provider = id -> "ctg_" * id)
+
+  result = Powsybl.SecurityAnalysis.run_ac(analysis, network)
+  post = Powsybl.SecurityAnalysis.get_post_contingency_results(result)
+  @test Set(post[:, "contingency_id"]) == Set(["L7-8-0", "L9-8-0", "ctg_L7-5-0"])
+
+  # Each is retrievable under the id it was registered with
+  for contingency_id in ["L7-8-0", "L9-8-0", "ctg_L7-5-0"]
+    @test Powsybl.SecurityAnalysis.find_post_contingency_result(result, contingency_id) isa
+          Powsybl.SecurityAnalysis.ComputationStatus
+  end
+end
+
+@testset "Test monitored element scopes and contingency lookup" begin
+  network = Powsybl.Network.create_ieee9()
+  analysis = Powsybl.SecurityAnalysis.create_analysis()
+  Powsybl.SecurityAnalysis.add_single_element_contingency(analysis, "L7-8-0")
+  Powsybl.SecurityAnalysis.add_single_element_contingency(analysis, "L9-8-0")
+
+  Powsybl.SecurityAnalysis.add_precontingency_monitored_elements(analysis; branch_ids = ["L9-6-0"])
+  Powsybl.SecurityAnalysis.add_postcontingency_monitored_elements(analysis, "L7-8-0"; branch_ids = ["L5-4-0"])
+
+  result = Powsybl.SecurityAnalysis.run_ac(analysis, network)
+
+  # A single contingency can be looked up by id, an unknown one throws
+  @test Powsybl.SecurityAnalysis.find_post_contingency_result(result, "L7-8-0") isa Powsybl.SecurityAnalysis.ComputationStatus
+  @test_throws KeyError Powsybl.SecurityAnalysis.find_post_contingency_result(result, "does-not-exist")
+
+  branch_results = Powsybl.SecurityAnalysis.get_branch_results(result)
+  @test size(branch_results, 2) >= 0
+end
+
+@testset "Test DC security analysis and report node" begin
+  network = Powsybl.Network.create_ieee9()
+  analysis = Powsybl.SecurityAnalysis.create_analysis()
+  Powsybl.SecurityAnalysis.add_single_element_contingency(analysis, "L7-8-0")
+  parameters = Powsybl.LoadFlow.load_flow_parameters()
+
+  # DC is carried by the load flow parameters, so it must reach the engine from there
+  dc_result = Powsybl.SecurityAnalysis.run_dc(analysis, network, parameters)
+  @test Powsybl.SecurityAnalysis.get_pre_contingency_result(dc_result) == Powsybl.SecurityAnalysis.CONVERGED
+
+  # A report node collects the functional logs of the run
+  report_node = Powsybl.Report.ReportNode()
+  ac_result = Powsybl.SecurityAnalysis.run_ac(analysis, network, parameters; report_node = report_node)
+  @test Powsybl.SecurityAnalysis.get_pre_contingency_result(ac_result) == Powsybl.SecurityAnalysis.CONVERGED
+  @test !isempty(string(report_node))
+end

@@ -9,4 +9,5 @@ module Powsybl
   include("Report.jl")
   include("Network.jl")
   include("LoadFlow.jl")
+  include("SecurityAnalysis.jl")
 end

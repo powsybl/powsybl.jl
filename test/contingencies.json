@@ -1,0 +1,12 @@
+{
+  "type" : "default",
+  "version" : "1.0",
+  "name" : "list",
+  "contingencies" : [ {
+    "id" : "fromJson",
+    "elements" : [ {
+      "id" : "L9-8-0",
+      "type" : "BRANCH"
+    } ]
+  } ]
+}

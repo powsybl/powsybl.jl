@@ -233,3 +233,69 @@ end
   @test Powsybl.SecurityAnalysis.get_pre_contingency_result(ac_result) == Powsybl.SecurityAnalysis.CONVERGED
   @test !isempty(string(report_node))
 end
+
+@testset "Test security analysis operator strategies" begin
+  SA = Powsybl.SecurityAnalysis
+  network = Powsybl.Network.create_eurostag_tutorial_example1()
+
+  analysis = SA.create_analysis()
+  SA.add_single_element_contingency(analysis, "NHV1_NHV2_1", "co1")
+
+  # Register remedial actions of several kinds
+  SA.add_load_active_power_action(analysis, "act_load_p", "LOAD", true, 10.0)
+  SA.add_load_reactive_power_action(analysis, "act_load_q", "LOAD", true, 5.0)
+  SA.add_generator_active_power_action(analysis, "act_gen", "GEN", false, 100.0)
+
+  # Operator strategy applying the load action on the contingency
+  SA.add_operator_strategy(analysis, "strat1", "co1", ["act_load_p"])
+  SA.add_monitored_elements(analysis; branch_ids = ["NHV1_NHV2_2"])
+
+  result = SA.run_ac(analysis, network)
+
+  # One row per operator strategy, converged
+  os = SA.get_operator_strategy_results(result)
+  @test os[:, "operator_strategy_id"] == ["strat1"]
+  @test os[1, "status"] == SA.CONVERGED
+
+  # A single strategy is retrievable by id, an unknown one throws
+  @test SA.find_operator_strategy_results(result, "strat1") == SA.CONVERGED
+  @test_throws KeyError SA.find_operator_strategy_results(result, "does-not-exist")
+
+  # Post-strategy limit violations are tabular and tagged with the strategy id
+  osv = SA.get_operator_strategy_limit_violations(result)
+  @test names(osv) == ["operator_strategy_id", "subject_id", "subject_name", "limit_type",
+                       "limit_name", "limit", "acceptable_duration", "limit_reduction", "value", "side"]
+  @test all(id -> id == "strat1", osv[:, "operator_strategy_id"])
+  @test "NHV1_NHV2_2" in osv[:, "subject_id"]
+  @test eltype(osv[:, "side"]) == SA.Side
+
+  # Enum-typed conditions and a violation filter are accepted end-to-end
+  analysis2 = SA.create_analysis()
+  SA.add_single_element_contingency(analysis2, "NHV1_NHV2_1", "co1")
+  SA.add_generator_active_power_action(analysis2, "act_gen", "GEN", true, -50.0)
+  SA.add_operator_strategy(analysis2, "strat2", "co1", ["act_gen"];
+                           condition_type = SA.ANY_VIOLATION_CONDITION,
+                           violation_subject_ids = ["NHV1_NHV2_2"],
+                           violation_types = [SA.CURRENT, SA.HIGH_VOLTAGE])
+  result2 = SA.run_ac(analysis2, network)
+  @test SA.get_operator_strategy_results(result2)[:, "operator_strategy_id"] == ["strat2"]
+
+  # Remaining action kinds marshal their arguments (including the Side enum) without
+  # error. They target elements the sample network lacks, so this context is not run —
+  # the engine only validates element ids at run time.
+  actions = SA.create_analysis()
+  @test SA.add_switch_action(actions, "a1", "a_switch", true) === nothing
+  @test SA.add_shunt_compensator_position_action(actions, "a2", "a_shunt", 1) === nothing
+  # is_relative says whether the position is added to the current one or replaces it,
+  # so it is given explicitly rather than defaulted
+  @test SA.add_phase_tap_changer_position_action(actions, "a3", "a_twt", false, 2; side = SA.SIDE_ONE) === nothing
+  @test SA.add_ratio_tap_changer_position_action(actions, "a4", "a_twt", true, 1) === nothing
+  @test SA.add_terminals_connection_action(actions, "a5", "a_line"; side = SA.SIDE_TWO, opening = false) === nothing
+
+  # The result can be exported to JSON
+  json_path = tempname() * ".json"
+  SA.export_to_json(result, json_path)
+  @test isfile(json_path)
+  @test filesize(json_path) > 0
+  rm(json_path; force = true)
+end

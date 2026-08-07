@@ -21,6 +21,8 @@ template <> struct jlcxx::IsMirroredType<loadflow_component_result> : std::false
 template <> struct jlcxx::IsMirroredType<slack_bus_result> : std::false_type {};
 template <> struct jlcxx::IsMirroredType<pre_contingency_result> : std::false_type {};
 template <> struct jlcxx::IsMirroredType<post_contingency_result> : std::false_type {};
+template <> struct jlcxx::IsMirroredType<operator_strategy_result> : std::false_type {};
+template <> struct jlcxx::IsMirroredType<limit_violation> : std::false_type {};
 
 using StringStringMap = std::map<std::string, std::string>;
 
@@ -466,4 +468,127 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.method("get_security_analysis_provider_parameters_names", [] (std::string const& provider) {
             return pypowsybl::getSecurityAnalysisProviderParametersNames(provider);
     }, "Get the parameter names of a security analysis provider");
+
+  // Operator strategies and remedial actions
+  // ThreeSide (side of a branch or a three windings transformer an action or a
+  // limit violation refers to). UNDEFINED (-1) means "no side".
+  mod.add_bits<ThreeSide>("ThreeSide", jlcxx::julia_type("CppEnum"));
+  mod.set_const("THREE_SIDE_UNDEFINED", ThreeSide::UNDEFINED);
+  mod.set_const("THREE_SIDE_ONE", ThreeSide::ONE);
+  mod.set_const("THREE_SIDE_TWO", ThreeSide::TWO);
+  mod.set_const("THREE_SIDE_THREE", ThreeSide::THREE);
+
+  // ConditionType: condition under which an operator strategy is applied.
+  mod.add_bits<condition_type>("ConditionType", jlcxx::julia_type("CppEnum"));
+  mod.set_const("CONDITION_TRUE", condition_type::TRUE_CONDITION);
+  mod.set_const("CONDITION_ALL_VIOLATION", condition_type::ALL_VIOLATION_CONDITION);
+  mod.set_const("CONDITION_ANY_VIOLATION", condition_type::ANY_VIOLATION_CONDITION);
+  mod.set_const("CONDITION_AT_LEAST_ONE_VIOLATION", condition_type::AT_LEAST_ONE_VIOLATION_CONDITION);
+
+  // ViolationType: type of limit violation used to filter operator strategy conditions.
+  mod.add_bits<violation_type>("ViolationType", jlcxx::julia_type("CppEnum"));
+  mod.set_const("VIOLATION_ACTIVE_POWER", violation_type::ACTIVE_POWER);
+  mod.set_const("VIOLATION_APPARENT_POWER", violation_type::APPARENT_POWER);
+  mod.set_const("VIOLATION_CURRENT", violation_type::CURRENT);
+  mod.set_const("VIOLATION_LOW_VOLTAGE", violation_type::LOW_VOLTAGE);
+  mod.set_const("VIOLATION_HIGH_VOLTAGE", violation_type::HIGH_VOLTAGE);
+  mod.set_const("VIOLATION_LOW_SHORT_CIRCUIT_CURRENT", violation_type::LOW_SHORT_CIRCUIT_CURRENT);
+  mod.set_const("VIOLATION_HIGH_SHORT_CIRCUIT_CURRENT", violation_type::HIGH_SHORT_CIRCUIT_CURRENT);
+  mod.set_const("VIOLATION_OTHER", violation_type::OTHER);
+
+  mod.add_type<limit_violation>("LimitViolation")
+          .method("subject_id", [](const limit_violation& v) { return std::string(v.subject_id); })
+          .method("subject_name", [](const limit_violation& v) { return std::string(v.subject_name); })
+          .method("limit_type", [](const limit_violation& v) { return v.limit_type; })
+          .method("limit", [](const limit_violation& v) { return v.limit; })
+          .method("limit_name", [](const limit_violation& v) { return std::string(v.limit_name); })
+          .method("acceptable_duration", [](const limit_violation& v) { return v.acceptable_duration; })
+          .method("limit_reduction", [](const limit_violation& v) { return v.limit_reduction; })
+          .method("value", [](const limit_violation& v) { return v.value; })
+          .method("side", [](const limit_violation& v) { return static_cast<ThreeSide>(v.side); });
+
+  mod.add_type<operator_strategy_result>("OperatorStrategyResult")
+          .method("operator_strategy_id", [](const operator_strategy_result& r) {
+             return std::string(r.operator_strategy_id);
+          })
+          .method("status", [](const operator_strategy_result& r) {
+             return static_cast<pypowsybl::PostContingencyComputationStatus>(r.status);
+          })
+          .method("limit_violations", [](const operator_strategy_result& r) {
+             return powsybl_array_to_julia<limit_violation>(&r.limit_violations);
+          });
+
+  mod.method("add_load_active_power_action", [] (pypowsybl::JavaHandle analysisContext, std::string const& actionId,
+                                                 std::string const& loadId, bool relativeValue, double activePower) {
+            pypowsybl::addLoadActivePowerAction(analysisContext, actionId, loadId, relativeValue, activePower);
+    }, "Add a load active power remedial action");
+
+  mod.method("add_load_reactive_power_action", [] (pypowsybl::JavaHandle analysisContext, std::string const& actionId,
+                                                   std::string const& loadId, bool relativeValue, double reactivePower) {
+            pypowsybl::addLoadReactivePowerAction(analysisContext, actionId, loadId, relativeValue, reactivePower);
+    }, "Add a load reactive power remedial action");
+
+  mod.method("add_generator_active_power_action", [] (pypowsybl::JavaHandle analysisContext, std::string const& actionId,
+                                                      std::string const& generatorId, bool relativeValue, double activePower) {
+            pypowsybl::addGeneratorActivePowerAction(analysisContext, actionId, generatorId, relativeValue, activePower);
+    }, "Add a generator active power remedial action");
+
+  mod.method("add_switch_action", [] (pypowsybl::JavaHandle analysisContext, std::string const& actionId,
+                                      std::string const& switchId, bool open) {
+            pypowsybl::addSwitchAction(analysisContext, actionId, switchId, open);
+    }, "Add a switch remedial action");
+
+  mod.method("add_phase_tap_changer_position_action", [] (pypowsybl::JavaHandle analysisContext, std::string const& actionId,
+                                                          std::string const& transformerId, bool isRelative, int tapPosition, ThreeSide side) {
+            pypowsybl::addPhaseTapChangerPositionAction(analysisContext, actionId, transformerId, isRelative, tapPosition, side);
+    }, "Add a phase tap changer position remedial action");
+
+  mod.method("add_ratio_tap_changer_position_action", [] (pypowsybl::JavaHandle analysisContext, std::string const& actionId,
+                                                          std::string const& transformerId, bool isRelative, int tapPosition, ThreeSide side) {
+            pypowsybl::addRatioTapChangerPositionAction(analysisContext, actionId, transformerId, isRelative, tapPosition, side);
+    }, "Add a ratio tap changer position remedial action");
+
+  mod.method("add_shunt_compensator_position_action", [] (pypowsybl::JavaHandle analysisContext, std::string const& actionId,
+                                                          std::string const& shuntId, int sectionCount) {
+            pypowsybl::addShuntCompensatorPositionAction(analysisContext, actionId, shuntId, sectionCount);
+    }, "Add a shunt compensator position remedial action");
+
+  mod.method("add_terminals_connection_action", [] (pypowsybl::JavaHandle analysisContext, std::string const& actionId,
+                                                    std::string const& elementId, ThreeSide side, bool opening) {
+            pypowsybl::addTerminalsConnectionAction(analysisContext, actionId, elementId, side, opening);
+    }, "Add a terminals connection remedial action");
+
+  mod.method("add_operator_strategy", [] (pypowsybl::JavaHandle analysisContext, std::string operatorStrategyId,
+                                          std::string contingencyId, std::vector<std::string> const& actionsIds,
+                                          condition_type conditionType, std::vector<std::string> const& subjectIds,
+                                          std::vector<int> const& violationTypesFilters) {
+            std::vector<violation_type> filters;
+            filters.reserve(violationTypesFilters.size());
+            for (int v : violationTypesFilters) {
+              filters.push_back(static_cast<violation_type>(v));
+            }
+            pypowsybl::addOperatorStrategy(analysisContext, operatorStrategyId, contingencyId, actionsIds,
+                                           conditionType, subjectIds, filters);
+    }, "Add an operator strategy applying remedial actions on a contingency");
+
+  mod.method("add_contingency_from_json_file", [] (pypowsybl::JavaHandle analysisContext, std::string const& jsonFilePath) {
+            pypowsybl::addContingencyFromJsonFile(analysisContext, jsonFilePath);
+    }, "Load contingencies from a JSON file into a security analysis context");
+
+  mod.method("add_action_from_json_file", [] (pypowsybl::JavaHandle analysisContext, std::string const& jsonFilePath) {
+            pypowsybl::addActionFromJsonFile(analysisContext, jsonFilePath);
+    }, "Load remedial actions from a JSON file into a security analysis context");
+
+  mod.method("add_operator_strategy_from_json_file", [] (pypowsybl::JavaHandle analysisContext, std::string const& jsonFilePath) {
+            pypowsybl::addOperatorStrategyFromJsonFile(analysisContext, jsonFilePath);
+    }, "Load operator strategies from a JSON file into a security analysis context");
+
+  mod.method("get_operator_strategy_results", [] (pypowsybl::JavaHandle result) {
+            return powsybl_array_to_julia<operator_strategy_result>(pypowsybl::getOperatorStrategyResults(result));
+    }, "Get the operator strategy results of a security analysis");
+
+  mod.method("security_analysis_result_to_json", [] (pypowsybl::JavaHandle result, std::string const& jsonFilePath) {
+            pypowsybl::exportToJson(result, jsonFilePath);
+    }, "Export a security analysis result to a JSON file");
+
 }

@@ -99,6 +99,42 @@ module SecurityAnalysis
   end
 
   """
+  Side of a branch or three windings transformer a remedial action or a limit
+  violation refers to. `SIDE_NONE` means no particular side.
+  """
+  @enum Side begin
+    SIDE_NONE = LibPowsybl.THREE_SIDE_UNDEFINED
+    SIDE_ONE = LibPowsybl.THREE_SIDE_ONE
+    SIDE_TWO = LibPowsybl.THREE_SIDE_TWO
+    SIDE_THREE = LibPowsybl.THREE_SIDE_THREE
+  end
+
+  """
+  Condition under which the remedial actions of an operator strategy are applied
+  after a contingency.
+  """
+  @enum ConditionType begin
+    TRUE_CONDITION = LibPowsybl.CONDITION_TRUE
+    ALL_VIOLATION_CONDITION = LibPowsybl.CONDITION_ALL_VIOLATION
+    ANY_VIOLATION_CONDITION = LibPowsybl.CONDITION_ANY_VIOLATION
+    AT_LEAST_ONE_VIOLATION_CONDITION = LibPowsybl.CONDITION_AT_LEAST_ONE_VIOLATION
+  end
+
+  """
+  Type of limit violation used to filter an operator strategy condition.
+  """
+  @enum ViolationType begin
+    ACTIVE_POWER = LibPowsybl.VIOLATION_ACTIVE_POWER
+    APPARENT_POWER = LibPowsybl.VIOLATION_APPARENT_POWER
+    CURRENT = LibPowsybl.VIOLATION_CURRENT
+    LOW_VOLTAGE = LibPowsybl.VIOLATION_LOW_VOLTAGE
+    HIGH_VOLTAGE = LibPowsybl.VIOLATION_HIGH_VOLTAGE
+    LOW_SHORT_CIRCUIT_CURRENT = LibPowsybl.VIOLATION_LOW_SHORT_CIRCUIT_CURRENT
+    HIGH_SHORT_CIRCUIT_CURRENT = LibPowsybl.VIOLATION_HIGH_SHORT_CIRCUIT_CURRENT
+    OTHER = LibPowsybl.VIOLATION_OTHER
+  end
+
+  """
   A security analysis context: it collects the contingencies and monitored elements
   to analyse before being run against a network.
   """
@@ -227,6 +263,165 @@ module SecurityAnalysis
   _as_parameters(parameters::Parameters) = parameters
   _as_parameters(parameters::LoadFlow.LoadFlowParameters) = Parameters(load_flow_parameters = parameters)
 
+  # Remedial actions
+
+  """
+      add_load_active_power_action(analysis, action_id, load_id, is_relative, active_power)
+
+  Add a remedial action changing the active power set point of a load. When
+  `is_relative` is `true` the value is added to the current set point, otherwise it
+  replaces it.
+  """
+  function add_load_active_power_action(analysis::SecurityAnalysisContext, action_id::String, load_id::String,
+                                        is_relative::Bool, active_power::Float64)
+    LibPowsybl.add_load_active_power_action(analysis.handle, action_id, load_id, is_relative, active_power)
+    return nothing
+  end
+
+  """
+      add_load_reactive_power_action(analysis, action_id, load_id, is_relative, reactive_power)
+
+  Add a remedial action changing the reactive power set point of a load.
+  See [`add_load_active_power_action`](@ref).
+  """
+  function add_load_reactive_power_action(analysis::SecurityAnalysisContext, action_id::String, load_id::String,
+                                          is_relative::Bool, reactive_power::Float64)
+    LibPowsybl.add_load_reactive_power_action(analysis.handle, action_id, load_id, is_relative, reactive_power)
+    return nothing
+  end
+
+  """
+      add_generator_active_power_action(analysis, action_id, generator_id, is_relative, active_power)
+
+  Add a remedial action changing the active power target of a generator.
+  See [`add_load_active_power_action`](@ref).
+  """
+  function add_generator_active_power_action(analysis::SecurityAnalysisContext, action_id::String, generator_id::String,
+                                             is_relative::Bool, active_power::Float64)
+    LibPowsybl.add_generator_active_power_action(analysis.handle, action_id, generator_id, is_relative, active_power)
+    return nothing
+  end
+
+  """
+      add_switch_action(analysis, action_id, switch_id, open)
+
+  Add a remedial action opening (`open = true`) or closing (`open = false`) a switch.
+  """
+  function add_switch_action(analysis::SecurityAnalysisContext, action_id::String, switch_id::String, open::Bool)
+    LibPowsybl.add_switch_action(analysis.handle, action_id, switch_id, open)
+    return nothing
+  end
+
+  """
+      add_phase_tap_changer_position_action(analysis, action_id, transformer_id, is_relative, tap_position;
+                                            side = SIDE_NONE)
+
+  Add a remedial action setting the tap position of a transformer's phase tap changer.
+  When `is_relative` is `true` the position is added to the current one, otherwise it
+  replaces it. `side` selects the leg of a three windings transformer (`SIDE_NONE` for a
+  two windings transformer).
+  """
+  function add_phase_tap_changer_position_action(analysis::SecurityAnalysisContext, action_id::String,
+                                                 transformer_id::String, is_relative::Bool, tap_position::Integer;
+                                                 side::Side = SIDE_NONE)
+    LibPowsybl.add_phase_tap_changer_position_action(analysis.handle, action_id, transformer_id, is_relative,
+                                                     Cint(tap_position), LibPowsybl.ThreeSide(side))
+    return nothing
+  end
+
+  """
+      add_ratio_tap_changer_position_action(analysis, action_id, transformer_id, is_relative, tap_position;
+                                            side = SIDE_NONE)
+
+  Add a remedial action setting the tap position of a transformer's ratio tap changer.
+  See [`add_phase_tap_changer_position_action`](@ref).
+  """
+  function add_ratio_tap_changer_position_action(analysis::SecurityAnalysisContext, action_id::String,
+                                                 transformer_id::String, is_relative::Bool, tap_position::Integer;
+                                                 side::Side = SIDE_NONE)
+    LibPowsybl.add_ratio_tap_changer_position_action(analysis.handle, action_id, transformer_id, is_relative,
+                                                     Cint(tap_position), LibPowsybl.ThreeSide(side))
+    return nothing
+  end
+
+  """
+      add_shunt_compensator_position_action(analysis, action_id, shunt_id, section)
+
+  Add a remedial action setting the number of connected sections of a shunt compensator.
+  """
+  function add_shunt_compensator_position_action(analysis::SecurityAnalysisContext, action_id::String,
+                                                 shunt_id::String, section::Integer)
+    LibPowsybl.add_shunt_compensator_position_action(analysis.handle, action_id, shunt_id, Cint(section))
+    return nothing
+  end
+
+  """
+      add_terminals_connection_action(analysis, action_id, element_id; side = SIDE_NONE, opening = true)
+
+  Add a remedial action opening (`opening = true`) or closing (`opening = false`) the
+  terminals of an element. `side` restricts the action to one side of the element.
+  """
+  function add_terminals_connection_action(analysis::SecurityAnalysisContext, action_id::String, element_id::String;
+                                           side::Side = SIDE_NONE, opening::Bool = true)
+    LibPowsybl.add_terminals_connection_action(analysis.handle, action_id, element_id, LibPowsybl.ThreeSide(side), opening)
+    return nothing
+  end
+
+  # Operator strategies
+
+  """
+      add_operator_strategy(analysis, operator_strategy_id, contingency_id, action_ids;
+                            condition_type = TRUE_CONDITION, violation_subject_ids = String[],
+                            violation_types = ViolationType[])
+
+  Register an operator strategy: after `contingency_id` occurs, apply the remedial
+  actions listed in `action_ids` (previously added with the `add_*_action` helpers)
+  when `condition_type` is met. For the violation-based conditions,
+  `violation_subject_ids` and `violation_types` restrict which violations trigger it.
+  """
+  function add_operator_strategy(analysis::SecurityAnalysisContext, operator_strategy_id::String,
+                                 contingency_id::String, action_ids::Vector{String};
+                                 condition_type::ConditionType = TRUE_CONDITION,
+                                 violation_subject_ids::Vector{String} = String[],
+                                 violation_types::Vector{ViolationType} = ViolationType[])
+    LibPowsybl.add_operator_strategy(analysis.handle, operator_strategy_id, contingency_id,
+                                     StdVector{StdString}(action_ids),
+                                     LibPowsybl.ConditionType(condition_type),
+                                     StdVector{StdString}(violation_subject_ids),
+                                     StdVector{Cint}(Cint[Integer(v) for v in violation_types]))
+    return nothing
+  end
+
+  """
+      add_contingencies_from_json_file(analysis, json_file_path)
+
+  Load contingencies described in a JSON file into the analysis context.
+  """
+  function add_contingencies_from_json_file(analysis::SecurityAnalysisContext, json_file_path::String)
+    LibPowsybl.add_contingency_from_json_file(analysis.handle, json_file_path)
+    return nothing
+  end
+
+  """
+      add_actions_from_json_file(analysis, json_file_path)
+
+  Load remedial actions described in a JSON file into the analysis context.
+  """
+  function add_actions_from_json_file(analysis::SecurityAnalysisContext, json_file_path::String)
+    LibPowsybl.add_action_from_json_file(analysis.handle, json_file_path)
+    return nothing
+  end
+
+  """
+      add_operator_strategies_from_json_file(analysis, json_file_path)
+
+  Load operator strategies described in a JSON file into the analysis context.
+  """
+  function add_operator_strategies_from_json_file(analysis::SecurityAnalysisContext, json_file_path::String)
+    LibPowsybl.add_operator_strategy_from_json_file(analysis.handle, json_file_path)
+    return nothing
+  end
+
   function _run(analysis::SecurityAnalysisContext, network::Network.NetworkHandle,
                 parameters, provider::String, dc::Bool, report_node)
     c_parameters = _to_c_parameters(_as_parameters(parameters))
@@ -338,6 +533,83 @@ module SecurityAnalysis
       end
     end
     throw(KeyError(contingency_id))
+  end
+
+  """
+      get_operator_strategy_results(result::Result) -> DataFrame
+
+  Return a DataFrame with the outcome of each operator strategy
+  (columns `operator_strategy_id`, `status`).
+  """
+  function get_operator_strategy_results(result::Result)
+    os_results = LibPowsybl.get_operator_strategy_results(result.handle)
+    df = DataFrame()
+    df[!, "operator_strategy_id"] = [String(LibPowsybl.operator_strategy_id(os)) for os in os_results]
+    df[!, "status"] = [ComputationStatus(LibPowsybl.status(os)) for os in os_results]
+    return df
+  end
+
+  """
+      find_operator_strategy_results(result::Result, operator_strategy_id::String) -> ComputationStatus
+
+  Return the computation status of a single operator strategy. Throws if the strategy is
+  not part of the result.
+  """
+  function find_operator_strategy_results(result::Result, operator_strategy_id::String)
+    for os_result in LibPowsybl.get_operator_strategy_results(result.handle)
+      if String(LibPowsybl.operator_strategy_id(os_result)) == operator_strategy_id
+        return ComputationStatus(LibPowsybl.status(os_result))
+      end
+    end
+    throw(KeyError(operator_strategy_id))
+  end
+
+  """
+      get_operator_strategy_limit_violations(result::Result) -> DataFrame
+
+  Return, as a DataFrame, the limit violations remaining after each operator strategy
+  has been applied (indexed by `operator_strategy_id`). The `limit_type` column holds
+  the ordinal of the Java `LimitViolationType`; `side` is a [`Side`](@ref).
+  """
+  function get_operator_strategy_limit_violations(result::Result)
+    os_results = LibPowsybl.get_operator_strategy_results(result.handle)
+    operator_strategy_id = String[]
+    subject_id = String[]
+    subject_name = String[]
+    limit_type = Int[]
+    limit_name = String[]
+    limit = Float64[]
+    acceptable_duration = Int[]
+    limit_reduction = Float64[]
+    value = Float64[]
+    side = Side[]
+    for os in os_results
+      os_id = String(LibPowsybl.operator_strategy_id(os))
+      for v in LibPowsybl.limit_violations(os)
+        push!(operator_strategy_id, os_id)
+        push!(subject_id, String(LibPowsybl.subject_id(v)))
+        push!(subject_name, String(LibPowsybl.subject_name(v)))
+        push!(limit_type, Int(LibPowsybl.limit_type(v)))
+        push!(limit_name, String(LibPowsybl.limit_name(v)))
+        push!(limit, LibPowsybl.limit(v))
+        push!(acceptable_duration, Int(LibPowsybl.acceptable_duration(v)))
+        push!(limit_reduction, LibPowsybl.limit_reduction(v))
+        push!(value, LibPowsybl.value(v))
+        push!(side, Side(LibPowsybl.side(v)))
+      end
+    end
+    return DataFrame(; operator_strategy_id, subject_id, subject_name, limit_type, limit_name,
+                     limit, acceptable_duration, limit_reduction, value, side)
+  end
+
+  """
+      export_to_json(result::Result, json_file_path::String)
+
+  Export the whole security analysis result to a JSON file.
+  """
+  function export_to_json(result::Result, json_file_path::String)
+    LibPowsybl.security_analysis_result_to_json(result.handle, json_file_path)
+    return nothing
   end
 
   """

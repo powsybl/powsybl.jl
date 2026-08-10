@@ -7,21 +7,21 @@
 using BinaryBuilder, Pkg
 
 name = "Powsybl"
-version = v"0.3.0"
+version = v"0.4.0"
 
-pypowsybl_version = v"1.14.0"
+pypowsybl_version = v"1.15.0"
 
 sources = [
     DirectorySource("./cpp", target="cpp"),
-    GitSource("https://github.com/powsybl/pypowsybl.git", "342fb354a7c9f9bdfdec66d5901005293848d64b", "cpp"),
+    GitSource("https://github.com/powsybl/pypowsybl.git", "5d246382efcc24edf568ffd4577c53fe4508bee3", "cpp"),
     ArchiveSource("https://github.com/powsybl/pypowsybl/releases/download/v$(pypowsybl_version)/binaries-v$(pypowsybl_version)-windows.zip",
-                  "4b4a8c1b2bc9a210902773bda3f14a4131e48fb54a453857164c7d90fa8114e3",
+                  "35b7865333d53bb7f60952a2d56f23b43b74996d2a747b209e10439dbce52171",
                   "powsybl-java-windows"),
     ArchiveSource("https://github.com/powsybl/pypowsybl/releases/download/v$(pypowsybl_version)/binaries-v$(pypowsybl_version)-linux.zip",
-                  "0edba1422152bd3c8fe17f5fa79ecdfbb2ab7a96391941c5d74bfdaf4075b108",
+                  "3fb02f30c74043b05ae9fb527e42ae0072f7cdb0e0924aeca3820182f9402a48",
                   "powsybl-java-linux"),
     ArchiveSource("https://github.com/powsybl/pypowsybl/releases/download/v$(pypowsybl_version)/binaries-v$(pypowsybl_version)-darwin.zip",
-                  "ce3a9254fabce9dec84ca4c39aaa1879e1b26bde12c403f3b9c10c443ce6d7a0",
+                  "9afda0a27e34ba628bcba9c48a88e0a456df362ba7da7c2d9fdce649debec963",
                   "powsybl-java-darwin")
 ]
 

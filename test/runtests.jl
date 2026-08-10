@@ -55,8 +55,31 @@ end
   @test parameters.dc_use_transformer_ratio == true
   @test parameters.countries_to_balance == []
   @test parameters.component_mode == Powsybl.LoadFlow.MAIN_CONNECTED
+  @test parameters.hvdc_ac_emulation == true
   @test parameters.dc_power_factor == 1.0
+  @test parameters.dc == false
   @test parameters.provider_parameters == Dict{String, String}()
+end
+
+@testset "Test the calculation kind overrides the dc parameter" begin
+  LF = Powsybl.LoadFlow
+
+  # run_ac and run_dc each impose their own calculation kind, so the dc field of the
+  # parameters they are given does not decide it
+  ac_reference = LF.run_ac(Powsybl.Network.create_ieee9(), LF.load_flow_parameters())
+  dc_reference = LF.run_dc(Powsybl.Network.create_ieee9(), LF.load_flow_parameters())
+  @test ac_reference.component_results[1, "iteration_count"] !=
+        dc_reference.component_results[1, "iteration_count"]
+
+  asking_for_dc = LF.load_flow_parameters()
+  asking_for_dc.dc = true
+  @test LF.run_ac(Powsybl.Network.create_ieee9(), asking_for_dc).component_results[1, "iteration_count"] ==
+        ac_reference.component_results[1, "iteration_count"]
+
+  asking_for_ac = LF.load_flow_parameters()
+  asking_for_ac.dc = false
+  @test LF.run_dc(Powsybl.Network.create_ieee9(), asking_for_ac).component_results[1, "iteration_count"] ==
+        dc_reference.component_results[1, "iteration_count"]
 end
 
 @testset "Test AC load flow" begin

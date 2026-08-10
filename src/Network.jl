@@ -234,5 +234,64 @@ module Network
       LibPowsybl.save_network(network.handle, network_file, format, LibPowsybl.dict_to_string_string_map(parameters))
   end
 
+  # ---------------------------------------------------------------------------
+  # In-memory and probing I/O
+  # ---------------------------------------------------------------------------
+
+  """
+      load_from_string(file_name, file_content[, parameters[, post_processors]]) -> NetworkHandle
+
+  Load a network from an in-memory string. `file_name` is only used for its extension,
+  which selects the format (e.g. `"network.xiidm"`, `"case.uct"`); `file_content` is the
+  actual data.
+  """
+  function load_from_string(file_name::String, file_content::String,
+                            parameters::Dict{String, String} = Dict{String, String}(),
+                            post_processors::Vector{String} = Vector{String}())::NetworkHandle
+      handle = LibPowsybl.load_from_string(file_name, file_content,
+                                           LibPowsybl.dict_to_string_string_map(parameters),
+                                           StdVector{StdString}(post_processors))
+    return NetworkHandle(handle,
+        LibPowsybl.id(handle),
+        LibPowsybl.name(handle),
+        LibPowsybl.source_format(handle),
+        LibPowsybl.forecast_distance(handle),
+        LibPowsybl.case_date(handle))
+  end
+
+  """
+      save_to_string(network[, format[, parameters]]) -> String
+
+  Export a network to a string in the given `format`, instead of to a file.
+  """
+  function save_to_string(network::NetworkHandle, format::String = "XIIDM",
+                          parameters::Dict{String, String} = Dict{String, String}())::String
+      return String(LibPowsybl.save_to_string(network.handle, format, LibPowsybl.dict_to_string_string_map(parameters)))
+  end
+
+  """
+      update_from_file(network, network_file[, parameters[, post_processors]])
+
+  Update an existing network in place with the data read from `network_file` (for
+  instance to refresh state variables from a solved case).
+  """
+  function update_from_file(network::NetworkHandle, network_file::String,
+                          parameters::Dict{String, String} = Dict{String, String}(),
+                          post_processors::Vector{String} = Vector{String}())
+      LibPowsybl.update_network(network.handle, network_file,
+                                LibPowsybl.dict_to_string_string_map(parameters),
+                                StdVector{StdString}(post_processors))
+      return nothing
+  end
+
+  """
+      is_loadable(network_file) -> Bool
+
+  Return `true` if `network_file` can be imported as a network (its format is recognised).
+  """
+  function is_loadable(network_file::String)
+      return LibPowsybl.is_network_loadable(network_file)
+  end
+
   include("NetworkCreationUtils.jl")
 end

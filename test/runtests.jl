@@ -40,6 +40,31 @@ end
   @test network_cgmes.name == "urn:uuid:simple-eu_N_EQUIPMENT_2024-09-25T12:47:58Z_1_1D__FM"
 end
 
+@testset "Test in-memory and probing I/O" begin
+  network = Powsybl.Network.load("simple-eu.xiidm")
+
+  # Export to a string and reload it from that string
+  content = Powsybl.Network.save_to_string(network, "XIIDM")
+  # the format defaults to XIIDM
+  @test Powsybl.Network.save_to_string(network) == content
+  @test content isa String
+  @test occursin("<?xml", content)
+
+  reloaded = Powsybl.Network.load_from_string("simple-eu.xiidm", content)
+  @test reloaded.name == network.name
+
+  # Probe whether a file is a loadable network
+  @test Powsybl.Network.is_loadable("simple-eu.xiidm") == true
+  @test Powsybl.Network.is_loadable("runtests.jl") == false
+
+  # Update an existing network in place from a file (CGMES implements updates)
+  cgmes_file = tempname() * ".zip"
+  Powsybl.Network.save(network, cgmes_file, "CGMES")
+  cgmes = Powsybl.Network.load(cgmes_file)
+  Powsybl.Network.update_from_file(cgmes, cgmes_file)
+  @test cgmes.source_format == "CGMES"
+end
+
 @testset "Test load flow parameters" begin
   parameters = Powsybl.LoadFlow.load_flow_parameters()
   @test parameters.voltage_init_mode == Powsybl.LoadFlow.UNIFORM_VALUES

@@ -168,6 +168,25 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
       pypowsybl::saveNetwork(handle, file, format, parameters, nullptr);
     }, "Save network to a file in a given format");
 
+  // In-memory / probing I/O
+  mod.method("load_from_string", [] (std::string const& fileName, std::string const& fileContent,
+                                     StringStringMap& parameters, std::vector<std::string>& postProcessors) {
+      return pypowsybl::loadNetworkFromString(fileName, fileContent, parameters, postProcessors, nullptr, false);
+    }, "Load a network from a string, the file name giving the format through its extension");
+
+  mod.method("save_to_string", [] (pypowsybl::JavaHandle handle, std::string const& format, StringStringMap const& parameters) {
+      return pypowsybl::saveNetworkToString(handle, format, parameters, nullptr);
+    }, "Save a network to a string in a given format");
+
+  mod.method("update_network", [] (pypowsybl::JavaHandle handle, std::string const& file,
+                                   StringStringMap const& parameters, std::vector<std::string> const& postProcessors) {
+      pypowsybl::updateNetwork(handle, file, parameters, postProcessors, nullptr);
+    }, "Update an existing network from a file");
+
+  mod.method("is_network_loadable", [] (std::string const& file) {
+      return pypowsybl::isNetworkLoadable(file);
+    }, "Tell whether a file can be imported as a network");
+
   mod.add_type<series>("SeriesType")
         .method("name", [](series& s) { return std::string(s.name); })
         .method("index", [](series& s) { return (bool) s.index; })

@@ -54,7 +54,11 @@ From a loaded network you can have a access to the following network elements (a
 * injections
 * branches
 * terminals
-* operational_limits
+* operational_limits (of the selected limit sets, or of every set with `show_inactive_sets = true`)
+* grounds
+* areas, areas_voltage_levels and areas_boundaries
+* dc_lines, dc_nodes, dc_buses, dc_grounds and voltage_source_converters
+* elements_properties
 
 ```julia
 
@@ -222,6 +226,28 @@ julia> Powsybl.Network.get_extensions_names()
  "substationPosition"
 ```
 
+Extensions can also be created, updated and removed. As for elements, each keyword
+argument is a column of the extension's dataframe (scalar or vector), coerced to the type
+declared by its schema; the index column is usually the `id` of the element the extension
+is attached to.
+
+```julia
+julia> network = Powsybl.Network.create_eurostag_tutorial_example1()
+
+# Attach an activePowerControl extension to a generator
+julia> Powsybl.Network.create_extensions(network, "activePowerControl";
+           id = "GEN", droop = 4.0, participate = true)
+
+julia> Powsybl.Network.get_extensions(network, "activePowerControl")
+
+# Update it, then remove it
+julia> Powsybl.Network.update_extensions(network, "activePowerControl"; id = "GEN", droop = 8.0)
+julia> Powsybl.Network.remove_extensions(network, "activePowerControl", "GEN")
+
+# Describe every available extension
+julia> Powsybl.Network.get_extensions_information()
+```
+
 ### Load flow module
 
 A load flow computation can be done using the LoadFlow submodule.
@@ -318,3 +344,100 @@ julia> Powsybl.Network.get_buses(network)
    8 │ VL6_0           101.265   -3.6874                      0                      0  VL6
    9 │ VL8_0           101.588    0.727537                    0                      0  VL8
 ````
+
+### Creating and updating elements
+
+Elements can be created and updated with the API: one keyword argument
+per column, each value a scalar (a single element) or a vector (several elements at once).
+Columns are coerced to the type declared by the element's dataframe schema, so numeric
+literals work without an explicit type. The `id` column identifies the elements.
+
+```julia
+julia> using Powsybl
+
+julia> network = Powsybl.Network.create_empty()
+
+julia> Powsybl.Network.create_substations(network; id = "S1", country = "FR")
+julia> Powsybl.Network.create_voltage_levels(network; id = "VL1", substation_id = "S1",
+           topology_kind = "BUS_BREAKER", nominal_v = 400.0)
+julia> Powsybl.Network.create_buses(network; id = "B1", voltage_level_id = "VL1")
+julia> Powsybl.Network.create_loads(network; id = "LOAD1", voltage_level_id = "VL1",
+           bus_id = "B1", p0 = 100.0, q0 = 10.0)
+julia> Powsybl.Network.create_generators(network; id = "GEN1", voltage_level_id = "VL1",
+           bus_id = "B1", target_p = 100.0, min_p = 0.0, max_p = 1000.0,
+           target_v = 400.0, voltage_regulator_on = true)
+
+# Update existing elements (id selects them, the other columns are the new values)
+julia> Powsybl.Network.update_loads(network; id = "LOAD1", p0 = 200.0)
+
+# Create several elements at once by passing vectors
+julia> Powsybl.Network.create_buses(network; id = ["B2", "B3"], voltage_level_id = ["VL1", "VL1"])
+```
+
+Convenience creators are available for `substations`, `voltage_levels`, `buses`,
+`busbar_sections`, `loads`, `generators`, `batteries`, `boundary_lines`, `lines`,
+`2_windings_transformers`, `3_windings_transformers`, `switches`,
+`static_var_compensators`, `lcc_converter_stations`, `vsc_converter_stations`,
+`hvdc_lines`, `tie_lines`, `operational_limits`, `minmax_reactive_limits` and
+`curve_reactive_limits`, `grounds`, `areas`, `areas_voltage_levels`, `areas_boundaries`,
+`internal_connections`, `dc_lines`, `dc_nodes`, `dc_grounds` and
+`voltage_source_converters` (plus `add_aliases`), with `update_*` helpers covering those
+and the tap changers, their steps, the shunt compensator sections, `terminals`, `branches`,
+`injections` and `dc_buses`. The generic `create_elements(network, element_type; kwargs...)` and
+`update_elements(network, element_type; kwargs...)` cover any element type. To discover
+the available columns of a dataframe, inspect an existing element table (e.g.
+`Powsybl.Network.get_loads(network, true)` for all attributes).
+
+Every creator and updater also accepts a `DataFrame` instead of keyword arguments, one row
+per element, which makes a read/modify/write round trip straightforward:
+
+```julia
+julia> loads = Powsybl.Network.get_loads(network)
+julia> Powsybl.Network.update_loads(network, DataFrame(id = loads[:, "id"], p0 = loads[:, "p0"] .* 2))
+```
+
+The data is given in one form or the other, never both: passing a
+`DataFrame` together with keyword arguments raises an `ArgumentError`.
+
+Some elements are described by several dataframes: a shunt compensator plus its
+linear or non-linear sections, or a tap changer plus its steps. Dedicated helpers take
+the extra dataframes as column sets (NamedTuples):
+
+```julia
+# Linear shunt compensator
+julia> Powsybl.Network.create_shunt_compensators(network;
+           id = "SHUNT", voltage_level_id = "VL1", bus_id = "B1",
+           section_count = 1, model_type = "LINEAR",
+           linear = (id = "SHUNT", g_per_section = 0.0, b_per_section = 1e-5, max_section_count = 1))
+
+# Non-linear shunt compensator (one row per section)
+julia> Powsybl.Network.create_shunt_compensators(network;
+           id = "SHUNT2", voltage_level_id = "VL1", bus_id = "B1",
+           section_count = 1, model_type = "NON_LINEAR",
+           non_linear = (id = ["SHUNT2", "SHUNT2"], g = [0.0, 0.0], b = [1e-5, 2e-5]))
+
+# Ratio tap changer with steps on a transformer
+julia> Powsybl.Network.create_ratio_tap_changers(network;
+           id = "TWT", tap = 1, low_tap = 0, target_v = 400.0, regulating = false,
+           steps = (id = ["TWT", "TWT", "TWT"], g = [0.0, 0.0, 0.0], b = [0.0, 0.0, 0.0],
+                    r = [0.0, 0.0, 0.0], x = [0.0, 0.0, 0.0], rho = [0.9, 1.0, 1.1]))
+```
+
+`create_phase_tap_changers` works the same way, with an extra `alpha` column in the
+steps. Boundary lines follow the same pattern, their optional generation part being the
+second dataframe:
+
+```julia
+julia> Powsybl.Network.create_boundary_lines(network;
+           id = "BL1", voltage_level_id = "VL1", bus_id = "B1",
+           p0 = 10.0, q0 = 3.0, r = 0.1, x = 1.0, g = 0.0, b = 0.0,
+           generation = (id = "BL1", min_p = 0.0, max_p = 100.0, target_p = 50.0,
+                         target_q = 10.0, target_v = 400.0, voltage_regulator_on = true))
+```
+
+The generic `create_elements(network, element_type, column_sets)` (a vector with one
+column set per dataframe) covers any multi-dataframe element type, and
+`create_extensions(network, extension_name, column_sets)` does the same for extensions.
+
+Column names are checked against the dataframe schema: an unknown column, or a missing
+index column, raises an `ArgumentError` rather than being forwarded to PowSyBl.

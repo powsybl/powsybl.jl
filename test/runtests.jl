@@ -6,6 +6,7 @@
 
 using Powsybl
 using Test
+using Logging
 
 # To avoid reading potential user specific configuration
 Powsybl.LibPowsybl.set_config_read(false)
@@ -131,4 +132,73 @@ end
   imported = Powsybl.Network.load("simple-eu.xiidm"; report_node = import_report_node)
   @test imported.name == "simple-eu"
   @test !isempty(string(import_report_node))
+end
+
+@testset "Test Java logging levels" begin
+  # PowSyBl maps these integers onto logback levels: 1 is TRACE and anything it does not
+  # know (0) turns logging off, so an inactive logger must map to OFF and not to TRACE.
+  @test Powsybl.Log.OFF == 0
+  @test Powsybl.Log.TRACE == 1
+
+  @test Powsybl.Log.java_level(TestLogger(min_level = Logging.Debug)) == Powsybl.Log.DEBUG
+  @test Powsybl.Log.java_level(TestLogger(min_level = Logging.Info)) == Powsybl.Log.INFO
+  @test Powsybl.Log.java_level(TestLogger(min_level = Logging.Warn)) == Powsybl.Log.WARN
+  @test Powsybl.Log.java_level(TestLogger(min_level = Logging.Error)) == Powsybl.Log.ERROR
+  @test Powsybl.Log.java_level(TestLogger(min_level = Powsybl.Log.TraceLevel)) == Powsybl.Log.TRACE
+  @test Powsybl.Log.java_level(NullLogger()) == Powsybl.Log.OFF
+
+  @test Powsybl.Log.julia_level(Powsybl.Log.ERROR) == Logging.Error
+  @test Powsybl.Log.julia_level(Powsybl.Log.WARN) == Logging.Warn
+  @test Powsybl.Log.julia_level(Powsybl.Log.INFO) == Logging.Info
+  # TRACE and DEBUG both surface as Debug, Julia drops anything below it
+  @test Powsybl.Log.julia_level(Powsybl.Log.DEBUG) == Logging.Debug
+  @test Powsybl.Log.julia_level(Powsybl.Log.TRACE) == Logging.Debug
+end
+
+@testset "Test Java logging" begin
+  parameters = Powsybl.LoadFlow.load_flow_parameters()
+
+  # PowSyBl messages are emitted through the logger active during the operation
+  info_logger = TestLogger(min_level = Logging.Info)
+  with_logger(info_logger) do
+    Powsybl.LoadFlow.run_ac(Powsybl.Network.create_ieee9(), parameters)
+  end
+  @test !isempty(info_logger.logs)
+  @test any(record -> occursin("OpenLoadFlow", record.message), info_logger.logs)
+
+  # the Java logger name and timestamp are carried along, as pypowsybl does through extra
+  @test all(record -> haskey(record.kwargs, :java_logger_name), info_logger.logs)
+  @test all(record -> haskey(record.kwargs, :java_timestamp), info_logger.logs)
+  @test all(record -> haskey(record.kwargs, :java_level), info_logger.logs)
+  @test all(record -> record.group == :powsybl, info_logger.logs)
+
+  # a more verbose logger yields more detail (Debug includes the Java stack traces)
+  debug_logger = TestLogger(min_level = Logging.Debug)
+  with_logger(debug_logger) do
+    Powsybl.LoadFlow.run_ac(Powsybl.Network.create_ieee9(), parameters)
+  end
+  @test length(debug_logger.logs) >= length(info_logger.logs)
+
+  # a logger that accepts nothing must silence PowSyBl rather than make it verbose
+  with_logger(NullLogger()) do
+    Powsybl.LoadFlow.run_ac(Powsybl.Network.create_ieee9(), parameters)
+  end
+  quiet_logger = TestLogger(min_level = Logging.Info)
+  with_logger(quiet_logger) do
+    Powsybl.Log.flush()
+  end
+  @test isempty(quiet_logger.logs)
+
+  # set_logger overrides the active logger, and nothing restores the default behaviour
+  explicit_logger = TestLogger(min_level = Logging.Info)
+  Powsybl.Log.set_logger(explicit_logger)
+  try
+    with_logger(NullLogger()) do
+      Powsybl.LoadFlow.run_ac(Powsybl.Network.create_ieee9(), parameters)
+    end
+    @test !isempty(explicit_logger.logs)
+    @test Powsybl.Log.get_logger() === explicit_logger
+  finally
+    Powsybl.Log.set_logger(nothing)
+  end
 end

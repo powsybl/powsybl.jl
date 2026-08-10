@@ -317,4 +317,31 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.method("create_loadflow_provider_parameters_series_array", [] (const std::string& provider) {
             return pypowsybl::createLoadFlowProviderParametersSeriesArray(provider);
     }, "Create a parameters series array for a given loadflow provider");
+
+  // ReportNode
+  mod.method("create_report_node", [] (std::string const& taskKey, std::string const& defaultName) {
+            return pypowsybl::createReportNode(taskKey, defaultName);
+    }, "Create a report node collecting functional logs");
+
+  mod.method("print_report", [] (pypowsybl::JavaHandle reportNode) {
+            return pypowsybl::printReport(reportNode);
+    }, "Render a report node as a text tree");
+
+  mod.method("json_report", [] (pypowsybl::JavaHandle reportNode) {
+            return pypowsybl::jsonReport(reportNode);
+    }, "Render a report node as JSON");
+
+  mod.method("load", [] (std::string const& s, StringStringMap& parameters,
+                         std::vector<std::string>& postProcessors, pypowsybl::JavaHandle reportNode) {
+    pypowsybl::JavaHandle network = pypowsybl::loadNetwork(s, parameters, postProcessors, &reportNode, false);
+    return network;
+  }, "Load a network from a file, collecting logs into a report node");
+
+  mod.method("run_load_flow", [] (const pypowsybl::JavaHandle& network, const pypowsybl::LoadFlowParameters& parameters,
+                                  bool dc, const std::string& provider, pypowsybl::JavaHandle reportNode) {
+            pypowsybl::LoadFlowParameters dcParameters = parameters;
+            dcParameters.dc = dc;
+            pypowsybl::LoadFlowComponentResultArray* results = pypowsybl::runLoadFlow(network, dcParameters, provider, &reportNode);
+            return powsybl_array_to_julia(results);
+    }, "Run a load flow, collecting logs into a report node");
 }

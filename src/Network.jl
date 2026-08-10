@@ -755,5 +755,466 @@ module Network
     return remove_extensions(network, extension_name, [id])
   end
 
+  # Network modifications (topology builders)
+
+  """
+  The kind of topology modification applied by [`create_network_modification`](@ref).
+  The ordinals match PowSyBl's `network_modification_type`.
+  """
+  @enum NetworkModificationType begin
+    VOLTAGE_LEVEL_TOPOLOGY_CREATION = LibPowsybl.VOLTAGE_LEVEL_TOPOLOGY_CREATION
+    CREATE_COUPLING_DEVICE = LibPowsybl.CREATE_COUPLING_DEVICE
+    CREATE_FEEDER_BAY = LibPowsybl.CREATE_FEEDER_BAY
+    CREATE_LINE_FEEDER = LibPowsybl.CREATE_LINE_FEEDER
+    CREATE_TWO_WINDINGS_TRANSFORMER_FEEDER = LibPowsybl.CREATE_TWO_WINDINGS_TRANSFORMER_FEEDER
+    CREATE_LINE_ON_LINE = LibPowsybl.CREATE_LINE_ON_LINE
+    REVERT_CREATE_LINE_ON_LINE = LibPowsybl.REVERT_CREATE_LINE_ON_LINE
+    CONNECT_VOLTAGE_LEVEL_ON_LINE = LibPowsybl.CONNECT_VOLTAGE_LEVEL_ON_LINE
+    REVERT_CONNECT_VOLTAGE_LEVEL_ON_LINE = LibPowsybl.REVERT_CONNECT_VOLTAGE_LEVEL_ON_LINE
+    REPLACE_TEE_POINT_BY_VOLTAGE_LEVEL_ON_LINE = LibPowsybl.REPLACE_TEE_POINT_BY_VOLTAGE_LEVEL_ON_LINE
+  end
+
+  """
+  The kind of element removed by [`remove_elements_modification`](@ref).
+  """
+  @enum RemoveModificationType begin
+    REMOVE_FEEDER = LibPowsybl.REMOVE_FEEDER
+    REMOVE_VOLTAGE_LEVEL = LibPowsybl.REMOVE_VOLTAGE_LEVEL
+    REMOVE_HVDC_LINE = LibPowsybl.REMOVE_HVDC_LINE
+  end
+
+  """
+      create_network_modification(network, modification_type; raise_exception = true, kwargs...)
+
+  Apply a topology modification of the given [`NetworkModificationType`](@ref). Each keyword
+  argument is a column of the modification's dataframe (scalar or vector); the columns are
+  coerced to the schema PowSyBl expects. This is the generic entry point behind the
+  `create_*` / `connect_*` / `replace_*` helpers below.
+  """
+  function create_network_modification(network::NetworkHandle, modification_type::NetworkModificationType;
+                                       raise_exception::Bool = true, kwargs...)
+    code = Int(modification_type)
+    builder = LibPowsybl.ElementDataframe()
+    _fill_builder!(builder, kwargs,
+                   LibPowsybl.get_modification_metadata_names(code),
+                   LibPowsybl.get_modification_metadata_types(code),
+                   LibPowsybl.get_modification_metadata_indices(code))
+    LibPowsybl.create_network_modification(network.handle, builder, code, raise_exception)
+    return nothing
+  end
+
+  """
+      create_network_modification(network, modification_type, df::DataFrame; raise_exception = true)
+
+  Apply a topology modification described by a `DataFrame`, one row per modification and one
+  column per attribute.
+  """
+  function create_network_modification(network::NetworkHandle, modification_type::NetworkModificationType,
+                                       df::DataFrame; raise_exception::Bool = true, kwargs...)
+    _reject_mixed_input(kwargs)
+    return create_network_modification(network, modification_type; raise_exception, _column_pairs(df)...)
+  end
+
+  """
+      create_voltage_level_topology(network; raise_exception = true, kwargs...)
+
+  Create the internal topology (busbar sections and coupling switches) of a voltage level.
+  Columns: `id`, `low_bus_or_busbar_index`, `aligned_buses_or_busbar_count`,
+  `low_section_index`, `section_count`, `bus_or_busbar_section_prefix_id`,
+  `switch_prefix_id`, `switch_kinds`.
+  """
+  function create_voltage_level_topology(network::NetworkHandle; raise_exception::Bool = true, kwargs...)
+    return create_network_modification(network, VOLTAGE_LEVEL_TOPOLOGY_CREATION; raise_exception, kwargs...)
+  end
+
+  """
+      create_coupling_device(network; raise_exception = true, kwargs...)
+
+  Create a coupling device (a closed switch chain) between two busbar sections or buses.
+  Columns: `bus_or_busbar_section_id_1`, `bus_or_busbar_section_id_2`, `switch_prefix_id`.
+  """
+  function create_coupling_device(network::NetworkHandle; raise_exception::Bool = true, kwargs...)
+    return create_network_modification(network, CREATE_COUPLING_DEVICE; raise_exception, kwargs...)
+  end
+
+  """
+      create_line_on_line(network; raise_exception = true, kwargs...)
+
+  Tap an existing line, splitting it in two and connecting a new line to a bus/busbar.
+  Columns include `line_id` (the line to split), `bbs_or_bus_id`, `new_line_id`,
+  `new_line_r`/`_x`/`_b1`/`_b2`/`_g1`/`_g2`, `line1_id`, `line2_id`, `position_percent`.
+  """
+  function create_line_on_line(network::NetworkHandle; raise_exception::Bool = true, kwargs...)
+    return create_network_modification(network, CREATE_LINE_ON_LINE; raise_exception, kwargs...)
+  end
+
+  """
+      revert_create_line_on_line(network; raise_exception = true, kwargs...)
+
+  Revert a [`create_line_on_line`](@ref), merging the two line segments back into one.
+  Columns: `line_to_be_merged1_id`, `line_to_be_merged2_id`, `line_to_be_deleted`,
+  `merged_line_id`, `merged_line_name`.
+  """
+  function revert_create_line_on_line(network::NetworkHandle; raise_exception::Bool = true, kwargs...)
+    return create_network_modification(network, REVERT_CREATE_LINE_ON_LINE; raise_exception, kwargs...)
+  end
+
+  """
+      connect_voltage_level_on_line(network; raise_exception = true, kwargs...)
+
+  Connect an existing voltage level onto a line by splitting it at `position_percent`.
+  Columns: `bbs_or_bus_id`, `line_id`, `position_percent`, `line1_id`, `line1_name`,
+  `line2_id`, `line2_name`.
+  """
+  function connect_voltage_level_on_line(network::NetworkHandle; raise_exception::Bool = true, kwargs...)
+    return create_network_modification(network, CONNECT_VOLTAGE_LEVEL_ON_LINE; raise_exception, kwargs...)
+  end
+
+  """
+      revert_connect_voltage_level_on_line(network; raise_exception = true, kwargs...)
+
+  Revert a [`connect_voltage_level_on_line`](@ref). Columns: `line1_id`, `line2_id`,
+  `line_id`, `line_name`.
+  """
+  function revert_connect_voltage_level_on_line(network::NetworkHandle; raise_exception::Bool = true, kwargs...)
+    return create_network_modification(network, REVERT_CONNECT_VOLTAGE_LEVEL_ON_LINE; raise_exception, kwargs...)
+  end
+
+  """
+      replace_tee_point_by_voltage_level_on_line(network; raise_exception = true, kwargs...)
+
+  Replace a tee point (three lines meeting) by connecting a voltage level on the line.
+  Columns: `tee_point_line1`, `tee_point_line2`, `tee_point_line_to_remove`,
+  `bbs_or_bus_id`, `new_line1_id`, `new_line2_id`, `new_line1_name`, `new_line2_name`.
+  """
+  function replace_tee_point_by_voltage_level_on_line(network::NetworkHandle; raise_exception::Bool = true, kwargs...)
+    return create_network_modification(network, REPLACE_TEE_POINT_BY_VOLTAGE_LEVEL_ON_LINE; raise_exception, kwargs...)
+  end
+
+  # Each topology modification also takes its columns as a DataFrame, as an alternative to
+  # the keyword form above.
+  for (fname, modification) in [
+        (:create_voltage_level_topology, :VOLTAGE_LEVEL_TOPOLOGY_CREATION),
+        (:create_coupling_device, :CREATE_COUPLING_DEVICE),
+        (:create_line_on_line, :CREATE_LINE_ON_LINE),
+        (:revert_create_line_on_line, :REVERT_CREATE_LINE_ON_LINE),
+        (:connect_voltage_level_on_line, :CONNECT_VOLTAGE_LEVEL_ON_LINE),
+        (:revert_connect_voltage_level_on_line, :REVERT_CONNECT_VOLTAGE_LEVEL_ON_LINE),
+        (:replace_tee_point_by_voltage_level_on_line, :REPLACE_TEE_POINT_BY_VOLTAGE_LEVEL_ON_LINE),
+      ]
+    @eval begin
+      """
+          $($(String(fname)))(network, df::DataFrame; raise_exception = true)
+
+      Same as the keyword form, with the columns taken from a `DataFrame`, one row per
+      modification.
+      """
+      function $(fname)(network::NetworkHandle, df::DataFrame; raise_exception::Bool = true, kwargs...)
+        _reject_mixed_input(kwargs)
+        return create_network_modification(network, $(modification), df; raise_exception)
+      end
+    end
+  end
+
+  function _as_id_vector(ids)
+    return ids isa AbstractString ? [String(ids)] : String.(collect(ids))
+  end
+
+  """
+      remove_elements_modification(network, connectable_ids, removal_type; raise_exception = true)
+
+  Remove elements with a topology-aware modification. `removal_type` is a
+  [`RemoveModificationType`](@ref); `connectable_ids` is an id or a vector of ids. Prefer
+  the [`remove_feeder_bays`](@ref) / [`remove_voltage_levels`](@ref) / [`remove_hvdc_lines`](@ref)
+  helpers.
+  """
+  function remove_elements_modification(network::NetworkHandle, connectable_ids,
+                                        removal_type::RemoveModificationType; raise_exception::Bool = true)
+    LibPowsybl.remove_elements_modification(network.handle, StdVector{StdString}(_as_id_vector(connectable_ids)),
+                                            Int(removal_type), raise_exception)
+    return nothing
+  end
+
+  """
+      remove_feeder_bays(network, connectable_ids; raise_exception = true)
+
+  Remove the given feeders (injections or branches) together with their bay switches.
+  """
+  function remove_feeder_bays(network::NetworkHandle, connectable_ids; raise_exception::Bool = true)
+    return remove_elements_modification(network, connectable_ids, REMOVE_FEEDER; raise_exception)
+  end
+
+  """
+      remove_voltage_levels(network, voltage_level_ids; raise_exception = true)
+
+  Remove the given voltage levels and everything they contain.
+  """
+  function remove_voltage_levels(network::NetworkHandle, voltage_level_ids; raise_exception::Bool = true)
+    return remove_elements_modification(network, voltage_level_ids, REMOVE_VOLTAGE_LEVEL; raise_exception)
+  end
+
+  """
+      remove_hvdc_lines(network, hvdc_line_ids; raise_exception = true)
+
+  Remove the given HVDC lines and their converter stations.
+  """
+  function remove_hvdc_lines(network::NetworkHandle, hvdc_line_ids; raise_exception::Bool = true)
+    return remove_elements_modification(network, hvdc_line_ids, REMOVE_HVDC_LINE; raise_exception)
+  end
+
+  function _unused_order_positions(network::NetworkHandle, busbar_section_id::String, before_or_after::String)
+    positions = collect(Int, LibPowsybl.get_unused_connectable_order_positions(network.handle, busbar_section_id, before_or_after))
+    return isempty(positions) ? nothing : (positions[1], positions[end])
+  end
+
+  """
+      get_unused_order_positions_before(network, busbar_section_id) -> Union{Tuple{Int,Int}, Nothing}
+
+  Return the `(min, max)` interval of connectable order positions still free *before* the
+  given busbar section, or `nothing` if none are available.
+  """
+  function get_unused_order_positions_before(network::NetworkHandle, busbar_section_id::String)
+    return _unused_order_positions(network, busbar_section_id, "BEFORE")
+  end
+
+  """
+      get_unused_order_positions_after(network, busbar_section_id) -> Union{Tuple{Int,Int}, Nothing}
+
+  Return the `(min, max)` interval of connectable order positions still free *after* the
+  given busbar section, or `nothing` if none are available.
+  """
+  function get_unused_order_positions_after(network::NetworkHandle, busbar_section_id::String)
+    return _unused_order_positions(network, busbar_section_id, "AFTER")
+  end
+
+  """
+      get_connectables_order_positions(network, voltage_level_id) -> DataFrame
+
+  Return the order positions taken by every connectable of the given voltage level, sorted
+  by increasing position.
+
+  An order position is the relative position of a connectable compared to the others on a
+  busbar section, as held by the `position` extension. A connectable takes as many positions
+  as it has feeders, so it may appear on several rows.
+  """
+  function get_connectables_order_positions(network::NetworkHandle, voltage_level_id::String)
+    series_array = LibPowsybl.get_connectables_order_positions(network.handle, voltage_level_id)
+    positions = create_dataframe_from_series_array(series_array[])
+    # Trim any padding the engine leaves on the name.
+    positions.extension_name = String.(rstrip.(positions.extension_name))
+    return sort!(positions, :order_position)
+  end
+
+  # Both replacements go through one native entry point, told apart by the merge flag.
+  function _split_or_merge_transformers(network::NetworkHandle, transformer_ids, merge::Bool)
+    LibPowsybl.split_or_merge_transformers(network.handle,
+                                           StdVector{StdString}(_as_id_vector(transformer_ids)), merge)
+    return nothing
+  end
+
+  """
+      replace_3_windings_transformers_with_3_2_windings_transformers(network, transformer_ids = String[])
+
+  Replace the given three-winding transformers by three two-winding ones each, connected to
+  a new fictitious bus at the star point. `transformer_ids` accepts a single id or a
+  collection of ids, and defaults to every three-winding transformer of the network.
+  """
+  function replace_3_windings_transformers_with_3_2_windings_transformers(network::NetworkHandle,
+                                                                          transformer_ids = String[])
+    return _split_or_merge_transformers(network, transformer_ids, false)
+  end
+
+  """
+      replace_3_2_windings_transformers_with_3_windings_transformers(network, transformer_ids = String[])
+
+  Replace groups of three two-winding transformers by a single three-winding one each, the
+  reverse of [`replace_3_windings_transformers_with_3_2_windings_transformers`](@ref).
+  `transformer_ids` accepts a single id or a collection of ids, and defaults to every
+  two-winding transformer of the network.
+  """
+  function replace_3_2_windings_transformers_with_3_windings_transformers(network::NetworkHandle,
+                                                                          transformer_ids = String[])
+    return _split_or_merge_transformers(network, transformer_ids, true)
+  end
+
+  # ---------------------------------------------------------------------------
+  # Feeder bays: create an element and connect it into a node-breaker voltage
+  # level in one step (creating the connection bay: switches, order position...).
+  # ---------------------------------------------------------------------------
+
+  # Build the modification dataframe from the element-type-specific schema. For the
+  # injection feeder bay (CREATE_FEEDER_BAY) the element type is carried in a
+  # `feeder_type` column.
+  # The element being created describes the first dataframe; the ones after it describe the
+  # parts that come with it, the sections of a shunt compensator or the generation of a
+  # boundary line. `column_sets` holds one column set per extra dataframe, in schema order.
+  function _create_feeder_bay(network::NetworkHandle, modification_type::NetworkModificationType,
+                              element_type::LibPowsybl.ElementType, feeder_type_name;
+                              raise_exception::Bool, column_sets::AbstractVector = Any[], kwargs...)
+    code = Int(modification_type)
+    # Held loosely typed: the columns may all be vectors, while `feeder_type` is a scalar.
+    provided = Pair{Symbol, Any}[name => value for (name, value) in kwargs]
+    if feeder_type_name !== nothing
+      # The element type is a column like any other, so it has to span every row.
+      rows = maximum((_column_length(value) for (_, value) in provided if value !== nothing); init = 1)
+      push!(provided, :feeder_type => rows == 1 ? feeder_type_name : fill(feeder_type_name, rows))
+    end
+
+    builder = LibPowsybl.ElementDataframe()
+    # Fall back to a single dataframe when the schema is unavailable, so the provided
+    # columns are still sent rather than silently dropped.
+    dataframe_count = max(Int(LibPowsybl.get_modification_element_dataframes_count(code, element_type)), 1)
+    for i in 0:(dataframe_count - 1)
+      columns = i == 0 ? provided :
+                (i <= length(column_sets) ? _column_pairs(column_sets[i]) : pairs((;)))
+      _fill_builder!(builder, columns,
+                     LibPowsybl.get_modification_element_metadata_names_at(code, element_type, i),
+                     LibPowsybl.get_modification_element_metadata_types_at(code, element_type, i),
+                     LibPowsybl.get_modification_element_metadata_indices_at(code, element_type, i))
+      LibPowsybl.finish_dataframe(builder)
+    end
+    LibPowsybl.create_network_modification(network.handle, builder, code, raise_exception)
+    return nothing
+  end
+
+  for (fname, etype, tname) in [
+        (:create_load_bay, :LOAD, "LOAD"),
+        (:create_generator_bay, :GENERATOR, "GENERATOR"),
+        (:create_battery_bay, :BATTERY, "BATTERY"),
+        (:create_boundary_line_bay, :BOUNDARY_LINE, "BOUNDARY_LINE"),
+        (:create_shunt_compensator_bay, :SHUNT_COMPENSATOR, "SHUNT_COMPENSATOR"),
+        (:create_static_var_compensator_bay, :STATIC_VAR_COMPENSATOR, "STATIC_VAR_COMPENSATOR"),
+        (:create_lcc_converter_station_bay, :LCC_CONVERTER_STATION, "LCC_CONVERTER_STATION"),
+        (:create_vsc_converter_station_bay, :VSC_CONVERTER_STATION, "VSC_CONVERTER_STATION"),
+      ]
+    @eval begin
+      """
+          $($(String(fname)))(network; raise_exception = true, kwargs...)
+
+      Create a $($tname) and connect it into a node-breaker voltage level, building its
+      connection bay. Keyword columns are the element's creation columns plus the bay
+      columns `bus_or_busbar_section_id`, `position_order` and `direction` (`"TOP"` or
+      `"BOTTOM"`).
+      """
+      function $(fname)(network::NetworkHandle; raise_exception::Bool = true, kwargs...)
+        return _create_feeder_bay(network, CREATE_FEEDER_BAY, LibPowsybl.$(etype), $tname;
+                                  raise_exception = raise_exception, kwargs...)
+      end
+
+      """
+          $($(String(fname)))(network, df::DataFrame; raise_exception = true, column_sets = Any[])
+
+      Same as the keyword form, with the element's own columns taken from a `DataFrame`, one
+      row per bay. The dataframes that come after it are still given as `column_sets`, each
+      of which may itself be a `DataFrame`.
+      """
+      function $(fname)(network::NetworkHandle, df::DataFrame; raise_exception::Bool = true,
+                        column_sets::AbstractVector = Any[], kwargs...)
+        _reject_mixed_input(kwargs)
+        return _create_feeder_bay(network, CREATE_FEEDER_BAY, LibPowsybl.$(etype), $tname;
+                                  raise_exception = raise_exception, column_sets = column_sets,
+                                  _column_pairs(df)...)
+      end
+    end
+  end
+
+  """
+      create_line_bays(network; raise_exception = true, kwargs...)
+
+  Create a line and connect both of its ends into node-breaker voltage levels, building a
+  bay on each side. Columns include the line's `id`, `r`, `x`, `b1`, `b2`, `g1`, `g2` and
+  the per-side bay columns `bus_or_busbar_section_id_1`/`_2`, `position_order_1`/`_2`,
+  `direction_1`/`_2`.
+  """
+  function create_line_bays(network::NetworkHandle; raise_exception::Bool = true, kwargs...)
+    return _create_feeder_bay(network, CREATE_LINE_FEEDER, LibPowsybl.LINE, nothing;
+                              raise_exception = raise_exception, kwargs...)
+  end
+
+  """
+      create_line_bays(network, df::DataFrame; raise_exception = true)
+
+  Same as the keyword form, with the columns taken from a `DataFrame`, one row per line.
+  """
+  function create_line_bays(network::NetworkHandle, df::DataFrame; raise_exception::Bool = true, kwargs...)
+    _reject_mixed_input(kwargs)
+    return create_line_bays(network; raise_exception, _column_pairs(df)...)
+  end
+
+  """
+      create_2_windings_transformer_bays(network; raise_exception = true, kwargs...)
+
+  Create a two windings transformer and connect both ends into node-breaker voltage levels.
+  Columns include `id`, `voltage_level1_id`, `voltage_level2_id`, `r`, `x`, `g`, `b`,
+  `rated_u1`, `rated_u2` and the per-side bay columns.
+  """
+  function create_2_windings_transformer_bays(network::NetworkHandle; raise_exception::Bool = true, kwargs...)
+    return _create_feeder_bay(network, CREATE_TWO_WINDINGS_TRANSFORMER_FEEDER, LibPowsybl.TWO_WINDINGS_TRANSFORMER, nothing;
+                              raise_exception = raise_exception, kwargs...)
+  end
+
+  """
+      create_2_windings_transformer_bays(network, df::DataFrame; raise_exception = true)
+
+  Same as the keyword form, with the columns taken from a `DataFrame`, one row per
+  transformer.
+  """
+  function create_2_windings_transformer_bays(network::NetworkHandle, df::DataFrame;
+                                              raise_exception::Bool = true, kwargs...)
+    _reject_mixed_input(kwargs)
+    return create_2_windings_transformer_bays(network; raise_exception, _column_pairs(df)...)
+  end
+
+  # ---------------------------------------------------------------------------
+  # Alias and internal-connection removal
+  # ---------------------------------------------------------------------------
+
+  """
+      remove_aliases(network; id, alias)
+
+  Remove element aliases. `id` selects the elements and `alias` the alias to drop from each
+  (scalars or matching vectors).
+  """
+  function remove_aliases(network::NetworkHandle; kwargs...)
+    builder = LibPowsybl.ElementDataframe()
+    _fill_builder!(builder, kwargs, ["id", "alias"], [0, 0], [1, 0])
+    LibPowsybl.remove_aliases(network.handle, builder)
+    return nothing
+  end
+
+  """
+      remove_aliases(network, df::DataFrame)
+
+  Same as the keyword form, with the `id` and `alias` columns taken from a `DataFrame`.
+  """
+  function remove_aliases(network::NetworkHandle, df::DataFrame; kwargs...)
+    _reject_mixed_input(kwargs)
+    return remove_aliases(network; _column_pairs(df)...)
+  end
+
+  """
+      remove_internal_connections(network; voltage_level_id, node1, node2)
+
+  Remove node-breaker internal connections (direct node-to-node links) identified by their
+  voltage level and the two node numbers they connect (scalars or matching vectors).
+  """
+  function remove_internal_connections(network::NetworkHandle; kwargs...)
+    builder = LibPowsybl.ElementDataframe()
+    _fill_builder!(builder, kwargs, ["voltage_level_id", "node1", "node2"], [0, 2, 2], [1, 0, 0])
+    LibPowsybl.remove_internal_connections(network.handle, builder)
+    return nothing
+  end
+
+  """
+      remove_internal_connections(network, df::DataFrame)
+
+  Same as the keyword form, with the `voltage_level_id`, `node1` and `node2` columns taken
+  from a `DataFrame`.
+  """
+  function remove_internal_connections(network::NetworkHandle, df::DataFrame; kwargs...)
+    _reject_mixed_input(kwargs)
+    return remove_internal_connections(network; _column_pairs(df)...)
+  end
+
   include("NetworkCreationUtils.jl")
 end

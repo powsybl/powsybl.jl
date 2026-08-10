@@ -233,6 +233,23 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.set_const("DEFAULT_ATTRIBUTES", filter_attributes_type::DEFAULT_ATTRIBUTES);
   mod.set_const("SELECTION_ATTRIBUTES", filter_attributes_type::SELECTION_ATTRIBUTES);
 
+  mod.add_bits<network_modification_type>("NetworkModificationType", jlcxx::julia_type("CppEnum"));
+  mod.set_const("VOLTAGE_LEVEL_TOPOLOGY_CREATION", network_modification_type::VOLTAGE_LEVEL_TOPOLOGY_CREATION);
+  mod.set_const("CREATE_COUPLING_DEVICE", network_modification_type::CREATE_COUPLING_DEVICE);
+  mod.set_const("CREATE_FEEDER_BAY", network_modification_type::CREATE_FEEDER_BAY);
+  mod.set_const("CREATE_LINE_FEEDER", network_modification_type::CREATE_LINE_FEEDER);
+  mod.set_const("CREATE_TWO_WINDINGS_TRANSFORMER_FEEDER", network_modification_type::CREATE_TWO_WINDINGS_TRANSFORMER_FEEDER);
+  mod.set_const("CREATE_LINE_ON_LINE", network_modification_type::CREATE_LINE_ON_LINE);
+  mod.set_const("REVERT_CREATE_LINE_ON_LINE", network_modification_type::REVERT_CREATE_LINE_ON_LINE);
+  mod.set_const("CONNECT_VOLTAGE_LEVEL_ON_LINE", network_modification_type::CONNECT_VOLTAGE_LEVEL_ON_LINE);
+  mod.set_const("REVERT_CONNECT_VOLTAGE_LEVEL_ON_LINE", network_modification_type::REVERT_CONNECT_VOLTAGE_LEVEL_ON_LINE);
+  mod.set_const("REPLACE_TEE_POINT_BY_VOLTAGE_LEVEL_ON_LINE", network_modification_type::REPLACE_TEE_POINT_BY_VOLTAGE_LEVEL_ON_LINE);
+
+  mod.add_bits<remove_modification_type>("RemoveModificationType", jlcxx::julia_type("CppEnum"));
+  mod.set_const("REMOVE_FEEDER", remove_modification_type::REMOVE_FEEDER);
+  mod.set_const("REMOVE_VOLTAGE_LEVEL", remove_modification_type::REMOVE_VOLTAGE_LEVEL);
+  mod.set_const("REMOVE_HVDC_LINE", remove_modification_type::REMOVE_HVDC_LINE);
+
   auto preJavaCall = [](pypowsybl::GraalVmGuard* guard, exception_handler* exc){ };
   auto postJavaCall = [](){ };
   pypowsybl::init(preJavaCall, postJavaCall);
@@ -611,4 +628,112 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
             for (const auto& m : pypowsybl::getNetworkExtensionsDataframeMetadata(name, tableName)) { result.push_back(m.isIndex() ? 1 : 0); }
             return result;
     }, "Get the index flags of the update dataframe of an extension");
+
+  // Network modifications (topology builders)
+
+  // Modification dataframe schema metadata (parallel arrays: names, types, index flags),
+  // keyed by the network_modification_type ordinal. Same type codes as element metadata.
+  mod.method("get_modification_metadata_names", [] (int modificationType) {
+            std::vector<std::string> result;
+            for (const auto& m : pypowsybl::getModificationMetadata(static_cast<network_modification_type>(modificationType))) {
+                result.push_back(m.name());
+            }
+            return result;
+    }, "Get the series names of a network modification dataframe");
+
+  mod.method("get_modification_metadata_types", [] (int modificationType) {
+            std::vector<int> result;
+            for (const auto& m : pypowsybl::getModificationMetadata(static_cast<network_modification_type>(modificationType))) {
+                result.push_back(m.type());
+            }
+            return result;
+    }, "Get the series types of a network modification dataframe");
+
+  mod.method("get_modification_metadata_indices", [] (int modificationType) {
+            std::vector<int> result;
+            for (const auto& m : pypowsybl::getModificationMetadata(static_cast<network_modification_type>(modificationType))) {
+                result.push_back(m.isIndex() ? 1 : 0);
+            }
+            return result;
+    }, "Get the index flags of a network modification dataframe");
+
+  mod.method("create_network_modification", [] (pypowsybl::JavaHandle network, ElementDataframe& builder,
+                                                int modificationType, bool throwException) {
+            std::vector<dataframe> dfs = builder.build_dataframes();
+            dataframe_array dataframes;
+            dataframes.dataframes = dfs.data();
+            dataframes.dataframes_count = (int) dfs.size();
+            pypowsybl::createNetworkModification(network, &dataframes,
+                                                 static_cast<network_modification_type>(modificationType),
+                                                 throwException, nullptr);
+    }, "Apply a network modification described by a dataframe builder");
+
+  mod.method("remove_elements_modification", [] (pypowsybl::JavaHandle network, std::vector<std::string> const& connectableIds,
+                                                 int removeModificationType, bool throwException) {
+            pypowsybl::removeElementsModification(network, connectableIds, nullptr,
+                                                  static_cast<remove_modification_type>(removeModificationType),
+                                                  throwException, nullptr);
+    }, "Remove elements (feeder bays, voltage levels or HVDC lines) with the given ids");
+
+  mod.method("get_unused_connectable_order_positions", [] (pypowsybl::JavaHandle network, std::string busbarSectionId,
+                                                           std::string beforeOrAfter) {
+            return pypowsybl::getUnusedConnectableOrderPositions(network, busbarSectionId, beforeOrAfter);
+    }, "Get the unused connectable order positions before or after a busbar section");
+
+  mod.method("get_connectables_order_positions", [] (pypowsybl::JavaHandle network, std::string const& voltageLevelId) {
+            return pypowsybl::getConnectablesOrderPositions(network, voltageLevelId);
+    }, "Get the order positions taken by every connectable of a voltage level");
+
+  mod.method("split_or_merge_transformers", [] (pypowsybl::JavaHandle network,
+                                                std::vector<std::string> const& transformerIds, bool merge) {
+            pypowsybl::splitOrMergeTransformers(network, transformerIds, merge, nullptr);
+    }, "Replace three-winding transformers by three two-winding ones, or the reverse when merging");
+
+  // Modification dataframe schema metadata for the feeder-bay family, which depends on the
+  // element type being created (a load, a generator, a line, ...). Returns one metadata set
+  // per dataframe the modification needs.
+  mod.method("get_modification_element_dataframes_count", [] (int modificationType, element_type elementType) {
+            return (int) pypowsybl::getModificationMetadataWithElementType(
+                static_cast<network_modification_type>(modificationType), elementType).size();
+    }, "Get the number of dataframes a feeder-bay modification needs for an element type");
+
+  mod.method("get_modification_element_metadata_names_at", [] (int modificationType, element_type elementType, int dataframeIndex) {
+            std::vector<std::string> result;
+            auto metadata = pypowsybl::getModificationMetadataWithElementType(
+                static_cast<network_modification_type>(modificationType), elementType);
+            if (dataframeIndex >= 0 && dataframeIndex < (int) metadata.size()) {
+                for (const auto& m : metadata[dataframeIndex]) { result.push_back(m.name()); }
+            }
+            return result;
+    }, "Get the series names of the i-th feeder-bay modification dataframe");
+
+  mod.method("get_modification_element_metadata_types_at", [] (int modificationType, element_type elementType, int dataframeIndex) {
+            std::vector<int> result;
+            auto metadata = pypowsybl::getModificationMetadataWithElementType(
+                static_cast<network_modification_type>(modificationType), elementType);
+            if (dataframeIndex >= 0 && dataframeIndex < (int) metadata.size()) {
+                for (const auto& m : metadata[dataframeIndex]) { result.push_back(m.type()); }
+            }
+            return result;
+    }, "Get the series types of the i-th feeder-bay modification dataframe");
+
+  mod.method("get_modification_element_metadata_indices_at", [] (int modificationType, element_type elementType, int dataframeIndex) {
+            std::vector<int> result;
+            auto metadata = pypowsybl::getModificationMetadataWithElementType(
+                static_cast<network_modification_type>(modificationType), elementType);
+            if (dataframeIndex >= 0 && dataframeIndex < (int) metadata.size()) {
+                for (const auto& m : metadata[dataframeIndex]) { result.push_back(m.isIndex() ? 1 : 0); }
+            }
+            return result;
+    }, "Get the index flags of the i-th feeder-bay modification dataframe");
+
+  mod.method("remove_aliases", [] (pypowsybl::JavaHandle network, ElementDataframe& builder) {
+            dataframe df = builder.build_dataframe();
+            pypowsybl::removeAliases(network, &df);
+    }, "Remove element aliases described by a dataframe (id, alias)");
+
+  mod.method("remove_internal_connections", [] (pypowsybl::JavaHandle network, ElementDataframe& builder) {
+            dataframe df = builder.build_dataframe();
+            pypowsybl::removeInternalConnections(network, &df);
+    }, "Remove node-breaker internal connections described by a dataframe");
 }

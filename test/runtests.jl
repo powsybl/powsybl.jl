@@ -302,3 +302,318 @@ end
   rtc_steps = Powsybl.Network.get_ratio_tap_changer_steps(eurostag)
   @test count(==("NGEN_NHV1"), rtc_steps[:, "id"]) == 3
 end
+
+@testset "Test modification enum values come from the binding" begin
+  N = Powsybl.Network
+  L = Powsybl.LibPowsybl
+
+  # The enum members must track the C enums rather than repeat their values, so that a
+  # renumbering upstream cannot silently apply a different modification.
+  @test Int(N.VOLTAGE_LEVEL_TOPOLOGY_CREATION) == Int(L.VOLTAGE_LEVEL_TOPOLOGY_CREATION)
+  @test Int(N.CREATE_FEEDER_BAY) == Int(L.CREATE_FEEDER_BAY)
+  @test Int(N.REPLACE_TEE_POINT_BY_VOLTAGE_LEVEL_ON_LINE) == Int(L.REPLACE_TEE_POINT_BY_VOLTAGE_LEVEL_ON_LINE)
+  @test Int(N.REMOVE_FEEDER) == Int(L.REMOVE_FEEDER)
+  @test Int(N.REMOVE_HVDC_LINE) == Int(L.REMOVE_HVDC_LINE)
+
+  # Every member of each enum is distinct and contiguous from zero
+  @test [Int(x) for x in instances(N.NetworkModificationType)] == collect(0:9)
+  @test [Int(x) for x in instances(N.RemoveModificationType)] == collect(0:2)
+end
+
+@testset "Test network modifications" begin
+  N = Powsybl.Network
+
+  # Build a node-breaker voltage level and create its topology (two busbar sections)
+  network = N.create_empty()
+  N.create_substations(network; id = "S1", country = "FR")
+  N.create_voltage_levels(network; id = "VL1", substation_id = "S1",
+                          topology_kind = "NODE_BREAKER", nominal_v = 400.0)
+  N.create_voltage_level_topology(network; id = "VL1",
+                                  aligned_buses_or_busbar_count = 2, section_count = 1, switch_kinds = "")
+  busbars = N.get_busbar_sections(network)[:, "id"]
+  @test length(busbars) == 2
+
+  # Couple the two busbar sections; a coupling device adds switches
+  switches_before = size(N.get_switches(network), 1)
+  N.create_coupling_device(network;
+                           bus_or_busbar_section_id_1 = busbars[1],
+                           bus_or_busbar_section_id_2 = busbars[2], switch_prefix_id = "cpl")
+  @test size(N.get_switches(network), 1) > switches_before
+
+  # Unused connectable order positions around a busbar section
+  interval = N.get_unused_order_positions_after(network, busbars[1])
+  @test interval === nothing || (interval isa Tuple{Int, Int} && interval[1] <= interval[2])
+
+  # Tap an existing line with a new line (create line on line)
+  eurostag = N.create_eurostag_tutorial_example1()
+  target_bus = N.get_bus_breaker_view_buses(eurostag)[1, "id"]
+  N.create_line_on_line(eurostag;
+                        bbs_or_bus_id = target_bus, new_line_id = "NEW_LINE",
+                        new_line_r = 1.0, new_line_x = 1.0,
+                        new_line_b1 = 0.0, new_line_b2 = 0.0, new_line_g1 = 0.0, new_line_g2 = 0.0,
+                        line_id = "NHV1_NHV2_1", line1_id = "L1_PART1", line2_id = "L1_PART2",
+                        position_percent = 50.0)
+  lines_after = N.get_lines(eurostag)[:, "id"]
+  @test "NEW_LINE" in lines_after
+  @test "L1_PART1" in lines_after && "L1_PART2" in lines_after
+  @test !("NHV1_NHV2_1" in lines_after)   # the tapped line was split
+
+  # Remove a feeder bay (a generator and its bay)
+  eurostag2 = N.create_eurostag_tutorial_example1()
+  @test "GEN" in N.get_generators(eurostag2)[:, "id"]
+  N.remove_feeder_bays(eurostag2, "GEN")
+  @test !("GEN" in N.get_generators(eurostag2)[:, "id"])
+end
+@testset "Test multi-dataframe feeder bays" begin
+  N = Powsybl.Network
+
+  function node_breaker_network()
+    network = N.create_empty()
+    N.create_substations(network; id = "S1", country = "FR")
+    N.create_voltage_levels(network; id = "VL1", substation_id = "S1",
+                            topology_kind = "NODE_BREAKER", nominal_v = 400.0)
+    N.create_voltage_level_topology(network; id = "VL1", aligned_buses_or_busbar_count = 1,
+                                    section_count = 1, switch_kinds = "")
+    return network, N.get_busbar_sections(network)[1, "id"]
+  end
+
+  # A shunt compensator bay is described by three dataframes: the shunt, its linear model
+  # and its non-linear sections. The extra ones are given as column sets.
+  network, busbar = node_breaker_network()
+  N.create_shunt_compensator_bay(network; id = "SHUNT1", section_count = 1,
+                                 model_type = "LINEAR", target_deadband = 2.0,
+                                 column_sets = Any[(id = "SHUNT1", g_per_section = 0.0,
+                                                    b_per_section = 1e-5, max_section_count = 1)],
+                                 bus_or_busbar_section_id = busbar, position_order = 30,
+                                 direction = "BOTTOM")
+  @test "SHUNT1" in N.get_shunt_compensators(network)[:, "id"]
+  @test count(==("SHUNT1"), N.get_linear_shunt_compensator_sections(network)[:, "id"]) == 1
+
+  # A boundary line bay is two dataframes, the line and its generation part
+  network, busbar = node_breaker_network()
+  N.create_boundary_line_bay(network; id = "BL1", p0 = 10.0, q0 = 3.0,
+                             r = 0.1, x = 1.0, g = 0.0, b = 0.0,
+                             column_sets = Any[(id = "BL1", min_p = 0.0, max_p = 100.0,
+                                                target_p = 50.0, target_q = 10.0,
+                                                target_v = 400.0, voltage_regulator_on = true)],
+                             bus_or_busbar_section_id = busbar, position_order = 40,
+                             direction = "BOTTOM")
+  @test "BL1" in N.get_boundary_lines(network)[:, "id"]
+  generation = N.get_boundary_lines_generation(network)
+  @test count(==("BL1"), generation[:, "id"]) == 1
+  @test generation[findfirst(==("BL1"), generation[:, "id"]), "target_p"] == 50.0
+
+  # The extra dataframes may be left out, the element then being created on its own
+  network, busbar = node_breaker_network()
+  N.create_boundary_line_bay(network; id = "BL2", p0 = 10.0, q0 = 3.0,
+                             r = 0.1, x = 1.0, g = 0.0, b = 0.0,
+                             bus_or_busbar_section_id = busbar, position_order = 50,
+                             direction = "TOP")
+  @test "BL2" in N.get_boundary_lines(network)[:, "id"]
+end
+
+@testset "Test feeder bays and alias/internal-connection removal" begin
+  N = Powsybl.Network
+
+  # A helper node-breaker network with two voltage levels, each with one busbar section
+  function node_breaker_network()
+    network = N.create_empty()
+    N.create_substations(network; id = "S1", country = "FR")
+    N.create_voltage_levels(network; id = "VL1", substation_id = "S1",
+                            topology_kind = "NODE_BREAKER", nominal_v = 400.0)
+    N.create_voltage_levels(network; id = "VL2", substation_id = "S1",
+                            topology_kind = "NODE_BREAKER", nominal_v = 400.0)
+    N.create_voltage_level_topology(network; id = "VL1", aligned_buses_or_busbar_count = 1,
+                                    section_count = 1, switch_kinds = "")
+    N.create_voltage_level_topology(network; id = "VL2", aligned_buses_or_busbar_count = 1,
+                                    section_count = 1, switch_kinds = "")
+    return network, N.get_busbar_sections(network)[:, "id"]
+  end
+
+  # Injection feeder bays (create the element and its connection bay in one step)
+  network, busbars = node_breaker_network()
+  N.create_load_bay(network; id = "LOAD1", p0 = 100.0, q0 = 10.0,
+                    bus_or_busbar_section_id = busbars[1], position_order = 10, direction = "BOTTOM")
+  @test "LOAD1" in N.get_loads(network)[:, "id"]
+
+  N.create_generator_bay(network; id = "GEN1", max_p = 1000.0, min_p = 0.0, target_p = 100.0,
+                         target_v = 400.0, voltage_regulator_on = true,
+                         bus_or_busbar_section_id = busbars[1], position_order = 20, direction = "TOP")
+  @test "GEN1" in N.get_generators(network)[:, "id"]
+
+  # Several bays in one call, every column given as a vector
+  N.create_load_bay(network; id = ["LOAD2", "LOAD3"], p0 = [10.0, 20.0], q0 = [1.0, 2.0],
+                    bus_or_busbar_section_id = [busbars[1], busbars[2]],
+                    position_order = [30, 30], direction = ["TOP", "TOP"])
+  @test issubset(["LOAD2", "LOAD3"], N.get_loads(network)[:, "id"])
+
+  # Line feeder bay (connects two node-breaker voltage levels)
+  network2, busbars2 = node_breaker_network()
+  N.create_line_bays(network2; id = "NEW_LINE", r = 1.0, x = 10.0, b1 = 0.0, b2 = 0.0, g1 = 0.0, g2 = 0.0,
+                     bus_or_busbar_section_id_1 = busbars2[1], bus_or_busbar_section_id_2 = busbars2[2],
+                     position_order_1 = 10, position_order_2 = 10)
+  @test "NEW_LINE" in N.get_lines(network2)[:, "id"]
+
+  # Two windings transformer feeder bay
+  network3, busbars3 = node_breaker_network()
+  N.create_2_windings_transformer_bays(network3; id = "NEW_TWT",
+                                       voltage_level1_id = "VL1", voltage_level2_id = "VL2",
+                                       r = 1.0, x = 10.0, g = 0.0, b = 0.0, rated_u1 = 400.0, rated_u2 = 400.0,
+                                       bus_or_busbar_section_id_1 = busbars3[1], bus_or_busbar_section_id_2 = busbars3[2],
+                                       position_order_1 = 10, position_order_2 = 10)
+  @test "NEW_TWT" in N.get_2_windings_transformers(network3)[:, "id"]
+
+  # Alias removal round-trip: add an alias, remove it, then the id is free to reuse
+  eurostag = N.create_eurostag_tutorial_example1()
+  N.create_elements(eurostag, Powsybl.LibPowsybl.ALIAS; id = "GEN", alias = "MY_ALIAS", alias_type = "")
+  N.remove_aliases(eurostag; id = "GEN", alias = "MY_ALIAS")
+  # Re-adding the same alias only succeeds because the previous one was removed
+  N.create_elements(eurostag, Powsybl.LibPowsybl.ALIAS; id = "GEN", alias = "MY_ALIAS", alias_type = "")
+  @test "GEN" in N.get_generators(eurostag)[:, "id"]
+
+  # Internal-connection removal reaches the engine: removing a nonexistent one is rejected
+  empty_nb = N.create_empty()
+  N.create_substations(empty_nb; id = "S1", country = "FR")
+  N.create_voltage_levels(empty_nb; id = "VL1", substation_id = "S1",
+                          topology_kind = "NODE_BREAKER", nominal_v = 400.0)
+  @test_throws Exception N.remove_internal_connections(empty_nb; voltage_level_id = "VL1", node1 = 0, node2 = 1)
+end
+
+@testset "Test DataFrame input for network modifications" begin
+  N = Powsybl.Network
+
+  function node_breaker_network()
+    network = N.create_empty()
+    N.create_substations(network; id = "S1", country = "FR")
+    N.create_voltage_levels(network, DataFrame(id = ["VL1", "VL2"], substation_id = ["S1", "S1"],
+                                               topology_kind = ["NODE_BREAKER", "NODE_BREAKER"],
+                                               nominal_v = [400.0, 400.0]))
+    # Both voltage levels get their topology from one DataFrame, one row each
+    N.create_voltage_level_topology(network, DataFrame(id = ["VL1", "VL2"],
+                                                       aligned_buses_or_busbar_count = [1, 1],
+                                                       section_count = [1, 1],
+                                                       switch_kinds = ["", ""]))
+    return network, N.get_busbar_sections(network)[:, "id"]
+  end
+
+  network, busbars = node_breaker_network()
+  @test length(busbars) == 2
+
+  # Injection bays from a DataFrame, one row per bay
+  N.create_load_bay(network, DataFrame(id = ["LOAD1", "LOADB"], p0 = [100.0, 50.0],
+                                       q0 = [10.0, 5.0],
+                                       bus_or_busbar_section_id = [busbars[1], busbars[2]],
+                                       position_order = [10, 10],
+                                       direction = ["BOTTOM", "BOTTOM"]))
+  @test issubset(["LOAD1", "LOADB"], N.get_loads(network)[:, "id"])
+
+  # A branch bay from a DataFrame
+  N.create_line_bays(network, DataFrame(id = ["NEW_LINE"], r = [1.0], x = [10.0],
+                                        b1 = [0.0], b2 = [0.0], g1 = [0.0], g2 = [0.0],
+                                        bus_or_busbar_section_id_1 = [busbars[1]],
+                                        bus_or_busbar_section_id_2 = [busbars[2]],
+                                        position_order_1 = [20], position_order_2 = [20]))
+  @test "NEW_LINE" in N.get_lines(network)[:, "id"]
+
+  # The frames after the first are still column sets, and may be DataFrames themselves
+  network2, busbars2 = node_breaker_network()
+  N.create_boundary_line_bay(network2,
+                             DataFrame(id = ["BL1"], p0 = [10.0], q0 = [3.0],
+                                       r = [0.1], x = [1.0], g = [0.0], b = [0.0],
+                                       bus_or_busbar_section_id = [busbars2[1]],
+                                       position_order = [30], direction = ["BOTTOM"]);
+                             column_sets = Any[DataFrame(id = ["BL1"], min_p = [0.0], max_p = [100.0],
+                                                         target_p = [50.0], target_q = [10.0],
+                                                         target_v = [400.0],
+                                                         voltage_regulator_on = [true])])
+  generation = N.get_boundary_lines_generation(network2)
+  @test count(==("BL1"), generation[:, "id"]) == 1
+  @test generation[findfirst(==("BL1"), generation[:, "id"]), "target_p"] == 50.0
+
+  # Alias removal from a DataFrame, two aliases at once
+  eurostag = N.create_eurostag_tutorial_example1()
+  aliases = DataFrame(id = ["GEN", "GEN2"], alias = ["ALIAS1", "ALIAS2"])
+  N.create_elements(eurostag, Powsybl.LibPowsybl.ALIAS,
+                    DataFrame(id = aliases[:, "id"], alias = aliases[:, "alias"],
+                              alias_type = ["", ""]))
+  N.remove_aliases(eurostag, aliases)
+  # Re-adding the same aliases only succeeds because the previous ones were removed
+  N.create_elements(eurostag, Powsybl.LibPowsybl.ALIAS,
+                    DataFrame(id = aliases[:, "id"], alias = aliases[:, "alias"],
+                              alias_type = ["", ""]))
+  @test "GEN" in N.get_generators(eurostag)[:, "id"]
+
+  # Internal-connection removal reaches the engine from a DataFrame too
+  empty_nb = N.create_empty()
+  N.create_substations(empty_nb; id = "S1", country = "FR")
+  N.create_voltage_levels(empty_nb; id = "VL1", substation_id = "S1",
+                          topology_kind = "NODE_BREAKER", nominal_v = 400.0)
+  @test_throws Exception N.remove_internal_connections(empty_nb,
+                                                        DataFrame(voltage_level_id = ["VL1"],
+                                                                  node1 = [0], node2 = [1]))
+
+  # Mixing the two forms is rejected rather than silently dropping one
+  network3, busbars3 = node_breaker_network()
+  @test_throws ArgumentError N.create_load_bay(network3, DataFrame(id = ["LOAD2"], p0 = [1.0]);
+                                                q0 = 1.0)
+  @test_throws ArgumentError N.create_coupling_device(network3,
+                                                      DataFrame(bus_or_busbar_section_id_1 = [busbars3[1]]);
+                                                      bus_or_busbar_section_id_2 = busbars3[2])
+end
+
+@testset "Test connectable order positions" begin
+  N = Powsybl.Network
+
+  network = N.create_empty()
+  N.create_substations(network; id = "S1", country = "FR")
+  N.create_voltage_levels(network; id = "VL1", substation_id = "S1",
+                          topology_kind = "NODE_BREAKER", nominal_v = 400.0)
+  N.create_voltage_level_topology(network; id = "VL1", aligned_buses_or_busbar_count = 1,
+                                  section_count = 1, switch_kinds = "")
+  busbar = N.get_busbar_sections(network)[:, "id"][1]
+
+  # Created out of order on purpose: the result is sorted by position, not by creation
+  N.create_load_bay(network; id = "LOAD1", p0 = 100.0, q0 = 10.0,
+                    bus_or_busbar_section_id = busbar, position_order = 30, direction = "BOTTOM")
+  N.create_load_bay(network; id = "LOAD2", p0 = 50.0, q0 = 5.0,
+                    bus_or_busbar_section_id = busbar, position_order = 10, direction = "TOP")
+
+  positions = N.get_connectables_order_positions(network, "VL1")
+  @test names(positions) == ["connectable_id", "order_position", "extension_name"]
+  @test positions[:, "connectable_id"] == ["LOAD2", "LOAD1"]
+  @test positions[:, "order_position"] == [10, 30]
+  @test all(name -> name == rstrip(name), positions[:, "extension_name"])
+
+  # The free intervals are consistent with the positions taken above
+  before = N.get_unused_order_positions_before(network, busbar)
+  after = N.get_unused_order_positions_after(network, busbar)
+  @test before[2] < minimum(positions[:, "order_position"])
+  @test after[1] > maximum(positions[:, "order_position"])
+end
+
+@testset "Test three-winding transformer replacement" begin
+  N = Powsybl.Network
+
+  network = N.create_micro_grid_be()
+  transformer_id = N.get_3_windings_transformers(network)[:, "id"][1]
+  two_winding_count = nrow(N.get_2_windings_transformers(network))
+
+  # Splitting one three-winding transformer yields three two-winding ones, one per leg
+  N.replace_3_windings_transformers_with_3_2_windings_transformers(network, transformer_id)
+  @test isempty(N.get_3_windings_transformers(network)[:, "id"])
+  split_ids = N.get_2_windings_transformers(network)[:, "id"]
+  @test length(split_ids) == two_winding_count + 3
+  @test count(id -> startswith(id, transformer_id), split_ids) == 3
+
+  # Merging back restores the topology; the merged transformer is named after its legs
+  N.replace_3_2_windings_transformers_with_3_windings_transformers(network)
+  merged_ids = N.get_3_windings_transformers(network)[:, "id"]
+  @test length(merged_ids) == 1
+  @test occursin(transformer_id, merged_ids[1])
+  @test nrow(N.get_2_windings_transformers(network)) == two_winding_count
+
+  # No ids given means every transformer of the network
+  all_transformers = N.create_micro_grid_be()
+  N.replace_3_windings_transformers_with_3_2_windings_transformers(all_transformers)
+  @test isempty(N.get_3_windings_transformers(all_transformers)[:, "id"])
+end

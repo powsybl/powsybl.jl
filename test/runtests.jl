@@ -58,7 +58,18 @@ end
   @test parameters.hvdc_ac_emulation == true
   @test parameters.dc_power_factor == 1.0
   @test parameters.dc == false
-  @test parameters.provider_parameters == Dict{String, String}()
+
+  # Whatever provider parameters the engine reports are carried through rather than
+  # dropped. This suite disables configuration reading, under which the provider
+  # contributes none, so the invariant is what is asserted rather than a count.
+  c_parameters = Powsybl.LibPowsybl.default_loadflow_parameters()
+  @test length(parameters.provider_parameters) ==
+        length(Powsybl.LibPowsybl.provider_parameters_keys(c_parameters))
+
+  # The provider parameter table is readable, and describes more parameters than a
+  # default parameter set carries values for
+  provider_table = Powsybl.LoadFlow.get_provider_parameters()
+  @test "maxNewtonRaphsonIterations" in provider_table[:, "name"]
 end
 
 @testset "Test the calculation kind overrides the dc parameter" begin
@@ -108,4 +119,50 @@ end
   parameters = Powsybl.LoadFlow.load_flow_parameters()
   result = Powsybl.LoadFlow.run_dc(network, parameters)
   @test size(result.component_results, 1) == 1
+end
+
+@testset "Test load flow parameters JSON round-trip" begin
+  LF = Powsybl.LoadFlow
+  parameters = LF.load_flow_parameters()
+  parameters.distributed_slack = false
+  parameters.dc_power_factor = 0.95
+  parameters.voltage_init_mode = LF.DC_VALUES
+  parameters.balance_type = LF.PROPORTIONAL_TO_LOAD
+  parameters.countries_to_balance = ["FR", "BE"]
+  parameters.hvdc_ac_emulation = false
+  parameters.dc = true
+  parameters.provider_parameters = Dict("maxNewtonRaphsonIterations" => "20")
+
+  # The JSON carries the values that were set, not merely the names of the settings:
+  # every key below is present whatever the parameters say, so the value is the assertion
+  json = LF.to_json(parameters)
+  @test occursin("\"balanceType\" : \"PROPORTIONAL_TO_LOAD\"", json)
+  @test occursin("\"dcPowerFactor\" : 0.95", json)
+  @test occursin("\"dc\" : true", json)
+  @test occursin("\"hvdcAcEmulation\" : false", json)
+  # Provider-specific parameters are serialized into the JSON extensions section
+  @test occursin("\"maxNewtonRaphsonIterations\" : 20", json)
+
+  # The common parameters round-trip exactly
+  restored = LF.from_json(json)
+  @test restored.distributed_slack == false
+  @test restored.dc_power_factor == 0.95
+  @test restored.voltage_init_mode == LF.DC_VALUES
+  @test restored.balance_type == LF.PROPORTIONAL_TO_LOAD
+  @test restored.countries_to_balance == ["FR", "BE"]
+  @test restored.hvdc_ac_emulation == false
+  @test restored.dc == true
+
+  # Parsing fills in the provider's parameters, including the one that was set, which
+  # comes back with the value it was given rather than the provider's default
+  @test !isempty(restored.provider_parameters)
+  @test restored.provider_parameters["maxNewtonRaphsonIterations"] == "20"
+
+  # A default set of parameters is serializable and re-parses to the same defaults
+  defaults = LF.load_flow_parameters()
+  reparsed = LF.from_json(LF.to_json(defaults))
+  @test reparsed.use_reactive_limits == defaults.use_reactive_limits
+  @test reparsed.balance_type == defaults.balance_type
+  # ... and the "20" above really was the caller's, not what the provider would have said
+  @test reparsed.provider_parameters["maxNewtonRaphsonIterations"] != "20"
 end

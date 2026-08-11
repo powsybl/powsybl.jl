@@ -22,6 +22,12 @@ template <> struct jlcxx::IsMirroredType<slack_bus_result> : std::false_type {};
 
 using StringStringMap = std::map<std::string, std::string>;
 
+// Collects the networks a merge is given, since JavaHandle is not default constructible
+// and so cannot travel from Julia inside a std::vector.
+struct NetworkList {
+    std::vector<pypowsybl::JavaHandle> networks;
+};
+
 void logFromJava(int level, long timestamp, char* loggerName, char* message) {
   //TODO Redirect log properly to julia logger
 }
@@ -167,6 +173,33 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.method("save_network", [] (pypowsybl::JavaHandle handle, std::string const& file, std::string const& format, StringStringMap const& parameters) {
       pypowsybl::saveNetwork(handle, file, format, parameters, nullptr);
     }, "Save network to a file in a given format");
+
+  // Network composition. merge takes every network at once, and JavaHandle has no default
+  // constructor so a vector of them does not marshal from Julia. Collect them through a
+  // builder instead, the way the element dataframes are built.
+  mod.add_type<NetworkList>("NetworkList")
+        .constructor<>()
+        .method("add_network", [] (NetworkList& list, pypowsybl::JavaHandle network) {
+          list.networks.push_back(network);
+        });
+
+  mod.method("merge_networks", [] (NetworkList& list) {
+      return pypowsybl::merge(list.networks);
+    }, "Merge the collected networks into the first one, returning the merged network");
+
+  mod.method("get_sub_network", [] (pypowsybl::JavaHandle network, std::string const& subNetworkId) {
+      return pypowsybl::getSubNetwork(network, subNetworkId);
+    }, "Get a sub-network of a network by its id");
+
+  mod.method("detach_sub_network", [] (pypowsybl::JavaHandle subNetwork) {
+      return pypowsybl::detachSubNetwork(subNetwork);
+    }, "Detach a sub-network into a standalone network");
+
+  mod.method("reduce_network", [] (pypowsybl::JavaHandle network, double vMin, double vMax,
+                                   std::vector<std::string> const& ids, std::vector<std::string> const& vls,
+                                   std::vector<int> const& depths, bool withBoundaryLines) {
+      pypowsybl::reduceNetwork(network, vMin, vMax, ids, vls, depths, withBoundaryLines);
+    }, "Reduce a network in place, keeping the elements matching the criteria");
 
   mod.add_type<series>("SeriesType")
         .method("name", [](series& s) { return std::string(s.name); })

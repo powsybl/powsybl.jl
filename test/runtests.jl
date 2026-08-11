@@ -109,3 +109,52 @@ end
   result = Powsybl.LoadFlow.run_dc(network, parameters)
   @test size(result.component_results, 1) == 1
 end
+
+@testset "Test network composition" begin
+  N = Powsybl.Network
+  voltage_level_count(network) = size(N.get_voltage_levels(network), 1)
+
+  be = N.create_micro_grid_be()
+  nl = N.create_micro_grid_nl()
+  vl_be = voltage_level_count(be)
+  vl_nl = voltage_level_count(nl)
+
+  # Merging absorbs the others into the first network, which afterwards is the merged one
+  N.merge(be, [nl])
+  @test voltage_level_count(be) == vl_be + vl_nl
+  subs = N.get_sub_networks(be)
+  @test size(subs, 1) == 2
+
+  # Retrieve a sub-network and detach it; both it and the parent stay usable
+  sub = N.get_sub_network(be, subs[1, "id"])
+  N.detach(sub)
+  @test voltage_level_count(sub) in (vl_be, vl_nl)
+  @test size(N.get_sub_networks(be), 1) == 1
+
+  # More than two networks go in a single merge
+  first_network = N.create_micro_grid_be()
+  second, third = N.create_micro_grid_nl(), N.create_ieee9()
+  total = voltage_level_count(first_network) + voltage_level_count(second) + voltage_level_count(third)
+  N.merge(first_network, second, third)
+  @test voltage_level_count(first_network) == total
+  @test size(N.get_sub_networks(first_network), 1) == 3
+
+  # Reduce a network in place, keeping only two voltage levels
+  network = N.create_ieee9()
+  kept = N.get_voltage_levels(network)[:, "id"][1:2]
+  N.reduce_by_ids(network, kept)
+  @test Set(N.get_voltage_levels(network)[:, "id"]) == Set(kept)
+
+  # Reducing by voltage range keeps every voltage level inside the range and drops some of
+  # the others; ones left attached to what is kept survive, so the range is a floor on what
+  # is kept rather than an exact description of it
+  ranged = N.create_micro_grid_be()
+  levels = N.get_voltage_levels(ranged)
+  threshold = (minimum(levels[:, "nominal_v"]) + maximum(levels[:, "nominal_v"])) / 2
+  in_range = Set(levels[levels[:, "nominal_v"] .>= threshold, "id"])
+  @test length(in_range) < size(levels, 1)             # there is something to drop
+  N.reduce_by_voltage_range(ranged, threshold, maximum(levels[:, "nominal_v"]); with_boundary_lines = true)
+  kept_ids = Set(N.get_voltage_levels(ranged)[:, "id"])
+  @test issubset(in_range, kept_ids)
+  @test length(kept_ids) < size(levels, 1)
+end

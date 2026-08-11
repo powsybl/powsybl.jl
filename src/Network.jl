@@ -234,5 +234,127 @@ module Network
       LibPowsybl.save_network(network.handle, network_file, format, LibPowsybl.dict_to_string_string_map(parameters))
   end
 
+  # ---------------------------------------------------------------------------
+  # Network composition (merge / sub-networks / reduce)
+  # ---------------------------------------------------------------------------
+
+  # Build a NetworkHandle (with its metadata) from a raw Java handle.
+  function _network_handle(handle::LibPowsybl.JavaHandle)
+    return NetworkHandle(handle,
+        LibPowsybl.id(handle),
+        LibPowsybl.name(handle),
+        LibPowsybl.source_format(handle),
+        LibPowsybl.forecast_distance(handle),
+        LibPowsybl.case_date(handle))
+  end
+
+  # Refresh a handle in place, so a caller keeps using the network they passed in rather
+  # than being left holding the handle it had before the operation.
+  function _refresh!(network::NetworkHandle, handle::LibPowsybl.JavaHandle)
+    network.handle = handle
+    network.id = LibPowsybl.id(handle)
+    network.name = LibPowsybl.name(handle)
+    network.source_format = LibPowsybl.source_format(handle)
+    network.forecast_distance = LibPowsybl.forecast_distance(handle)
+    network.case_date = LibPowsybl.case_date(handle)
+    return network
+  end
+
+  """
+      merge(network, others)
+      merge(network, others::NetworkHandle...)
+
+  Merge `others` into `network`, each becoming a sub-network of it. `network` is modified:
+  it absorbs the others and afterwards refers to the merged network.
+  """
+  function merge(network::NetworkHandle, others::AbstractVector{<:NetworkHandle})
+    list = LibPowsybl.NetworkList()
+    LibPowsybl.add_network(list, network.handle)
+    for other in others
+      LibPowsybl.add_network(list, other.handle)
+    end
+    _refresh!(network, LibPowsybl.merge_networks(list))
+    return nothing
+  end
+
+  merge(network::NetworkHandle, others::NetworkHandle...) = merge(network, collect(NetworkHandle, others))
+  merge(network::NetworkHandle, other::NetworkHandle) = merge(network, NetworkHandle[other])
+
+  """
+      get_sub_networks(network[, all_attributes[, attributes]]) -> DataFrame
+
+  Return the sub-networks of a (merged) network as a DataFrame.
+  """
+  function get_sub_networks(network::NetworkHandle, all_attributes::Bool = false, attributes::Vector{String} = Vector{String}())
+    return get_elements(network, LibPowsybl.SUB_NETWORK, all_attributes, attributes)
+  end
+
+  """
+      get_sub_network(network, sub_network_id::String) -> NetworkHandle
+
+  Return the sub-network of `network` with the given id.
+  """
+  function get_sub_network(network::NetworkHandle, sub_network_id::String)
+    return _network_handle(LibPowsybl.get_sub_network(network.handle, sub_network_id))
+  end
+
+  """
+      detach(sub_network)
+
+  Detach a sub-network from its parent into a standalone network. `sub_network` is
+  modified: afterwards it refers to the detached network.
+  """
+  function detach(sub_network::NetworkHandle)
+    _refresh!(sub_network, LibPowsybl.detach_sub_network(sub_network.handle))
+    return nothing
+  end
+
+  # The engine takes every reduction criterion at once; the three functions below each
+  # select one of them. `with_boundary_lines` asks for boundary lines to replace the lines
+  # cut where the reduction stops.
+  function _reduce(network::NetworkHandle;
+                   v_min::Float64 = 0.0, v_max::Float64 = floatmax(Float64),
+                   ids::Vector{String} = String[],
+                   vl_depths::AbstractVector = Tuple{String, Int}[],
+                   with_boundary_lines::Bool = false)
+    vls = String[String(first(pair)) for pair in vl_depths]
+    depths = Cint[Cint(last(pair)) for pair in vl_depths]
+    LibPowsybl.reduce_network(network.handle, v_min, v_max,
+                              StdVector{StdString}(ids), StdVector{StdString}(vls), StdVector{Cint}(depths),
+                              with_boundary_lines)
+    return nothing
+  end
+
+  """
+      reduce_by_voltage_range(network, v_min, v_max; with_boundary_lines = false)
+
+  Reduce a network in place, keeping only the voltage levels whose nominal voltage is in
+  `[v_min, v_max]`.
+  """
+  function reduce_by_voltage_range(network::NetworkHandle, v_min::Float64, v_max::Float64;
+                                   with_boundary_lines::Bool = false)
+    return _reduce(network; v_min = v_min, v_max = v_max, with_boundary_lines = with_boundary_lines)
+  end
+
+  """
+      reduce_by_ids(network, ids; with_boundary_lines = false)
+
+  Reduce a network in place, keeping only the voltage levels whose id is in `ids`.
+  """
+  function reduce_by_ids(network::NetworkHandle, ids::Vector{String}; with_boundary_lines::Bool = false)
+    return _reduce(network; ids = ids, with_boundary_lines = with_boundary_lines)
+  end
+
+  """
+      reduce_by_ids_and_depths(network, vl_depths; with_boundary_lines = false)
+
+  Reduce a network in place, keeping the given voltage levels and their neighbours up to
+  the given depth. `vl_depths` is a vector of `(voltage_level_id, depth)` pairs.
+  """
+  function reduce_by_ids_and_depths(network::NetworkHandle, vl_depths::AbstractVector;
+                                    with_boundary_lines::Bool = false)
+    return _reduce(network; vl_depths = vl_depths, with_boundary_lines = with_boundary_lines)
+  end
+
   include("NetworkCreationUtils.jl")
 end

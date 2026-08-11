@@ -99,7 +99,14 @@ module LoadFlow
         LibPowsybl.hvdc_ac_emulation(parameters),
         LibPowsybl.dc_power_factor(parameters),
         LibPowsybl.dc(parameters),
-        Dict{String, String}())
+        provider_parameters_to_dict(parameters))
+  end
+
+  function provider_parameters_to_dict(parameters::LibPowsybl.LoadFlowParameters)
+      names = LibPowsybl.provider_parameters_keys(parameters)
+      values = LibPowsybl.provider_parameters_values(parameters)
+      return Dict{String, String}(String(name) => String(value)
+                                  for (name, value) in zip(names, values))
   end
 
   function load_flow_results_to_dataframe(component_results)
@@ -140,6 +147,31 @@ module LoadFlow
   end
 
   """
+      to_json(parameters::LoadFlowParameters) -> String
+
+  Serialize load flow parameters (including provider-specific parameters) to a
+  PowSyBl JSON string.
+  """
+  function to_json(parameters::LoadFlowParameters)
+      return String(LibPowsybl.load_flow_parameters_to_json(load_flow_parameters_to_c_struct(parameters)))
+  end
+
+  """
+      from_json(json::AbstractString) -> LoadFlowParameters
+
+  Deserialize load flow parameters from a PowSyBl JSON string, the inverse of
+  [`to_json`](@ref).
+
+  Provider-specific parameters are carried inside the JSON `extensions` section. Only
+  those belonging to the default provider are read back, and they come back in
+  `provider_parameters` alongside the provider's own defaults for everything the JSON
+  did not set.
+  """
+  function from_json(json::AbstractString)
+      return c_parameters_to_julia_struct(LibPowsybl.load_flow_parameters_from_json(String(json)))
+  end
+
+  """
       run_ac(network, parameters, provider = "")
 
   Run an AC load flow. The `dc` field of `parameters` is forced to `false`.
@@ -160,6 +192,7 @@ module LoadFlow
   end
 
   function get_provider_parameters(provider::String = "")
-      return Network.create_dataframe_from_series_array(LibPowsybl.create_loadflow_provider_parameters_series_array(provider))
+      series_array = LibPowsybl.create_loadflow_provider_parameters_series_array(provider)
+      return Network.create_dataframe_from_series_array(series_array[])
   end
 end

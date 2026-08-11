@@ -317,4 +317,13 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.method("create_loadflow_provider_parameters_series_array", [] (const std::string& provider) {
             return pypowsybl::createLoadFlowProviderParametersSeriesArray(provider);
     }, "Create a parameters series array for a given loadflow provider");
+
+  mod.method("load_flow_parameters_to_json", [] (const pypowsybl::LoadFlowParameters& parameters) {
+            return pypowsybl::writeLoadFlowParametersToJson(parameters);
+    }, "Serialize load flow parameters to a JSON string");
+
+  mod.method("load_flow_parameters_from_json", [] (const std::string& parametersJson) {
+            std::unique_ptr<pypowsybl::LoadFlowParameters> parameters(pypowsybl::createLoadFlowParametersFromJson(parametersJson));
+            return *parameters;
+    }, "Deserialize load flow parameters from a JSON string");
 }

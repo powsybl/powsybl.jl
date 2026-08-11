@@ -175,6 +175,32 @@ julia> Powsybl.Network.save(network, "Ouput.xiidm", "XIIDM", Dict("iidm.export.x
 
 See the [documentation](https://powsybl.readthedocs.io/projects/powsybl-core/en/v6.5.1/grid_exchange_formats/index.html) for available export parameters.
 
+### Network composition
+
+Networks can be merged, sliced into sub-networks, and reduced. All three modify the network
+they are given rather than returning a new one.
+
+```julia
+julia> be = Powsybl.Network.create_micro_grid_be()
+julia> nl = Powsybl.Network.create_micro_grid_nl()
+
+# Merge the others into the first, each becoming one of its sub-networks. `be` is the
+# merged network afterwards; any number of networks can be given at once.
+julia> Powsybl.Network.merge(be, nl)
+julia> Powsybl.Network.get_sub_networks(be)
+
+# Retrieve a sub-network and detach it from its parent, leaving it standalone
+julia> sub = Powsybl.Network.get_sub_network(be, "urn:uuid:...")
+julia> Powsybl.Network.detach(sub)
+
+# Reduce a network, keeping the voltage levels the criterion selects. Pass
+# `with_boundary_lines = true` to replace the lines cut where the reduction stops.
+julia> network = Powsybl.Network.load("large_case.xiidm")
+julia> Powsybl.Network.reduce_by_voltage_range(network, 200.0, 400.0; with_boundary_lines = true)
+julia> Powsybl.Network.reduce_by_ids(network, ["VL1", "VL2"])
+julia> Powsybl.Network.reduce_by_ids_and_depths(network, [("VL1", 1)])
+```
+
 ### Network extensions
 
 Network extensions can be accessed through a call to Powsybl.Network.get_extensions

@@ -27,6 +27,36 @@ Powsybl.LibPowsybl.set_config_read(false)
   @test lines[:, "bus1_id"] == ["VL2_1", "VL3_1", "VL2_1", "VL3_1", "VL5_0", "VL6_0"]
 end
 
+@testset "Test per-unit settings" begin
+  N = Powsybl.Network
+  network = N.create_ieee9()
+  other = N.create_ieee9()
+
+  # A network reads physical units against a 100 MVA base until told otherwise
+  @test network.per_unit == false
+  @test network.nominal_apparent_power == 100.0
+  x_physical = N.get_lines(network)[1, "x"]
+
+  # In per-unit the same reactance is reported relative to the base impedance V^2 / S
+  network.per_unit = true
+  x_per_unit = N.get_lines(network)[1, "x"]
+  nominal_v = N.get_voltage_levels(network)[1, "nominal_v"]
+  @test x_per_unit ≈ x_physical / (nominal_v^2 / network.nominal_apparent_power)
+
+  # Doubling the base power doubles the per-unit value
+  network.nominal_apparent_power = 200.0
+  @test N.get_lines(network)[1, "x"] ≈ 2 * x_per_unit
+
+  # The setting belongs to the network it was set on, and leaves others alone
+  @test other.per_unit == false
+  @test other.nominal_apparent_power == 100.0
+  @test N.get_lines(other)[1, "x"] == x_physical
+
+  # Turning it off restores the physical value
+  network.per_unit = false
+  @test N.get_lines(network)[1, "x"] == x_physical
+end
+
 @testset "Test network save and load" begin
   network = Powsybl.Network.load("simple-eu.xiidm")
   @test network.name == "simple-eu"

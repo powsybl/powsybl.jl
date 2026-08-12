@@ -9,9 +9,6 @@ module Network
   using CxxWrap
   using DataFrames
 
-  nominal_apparent_power::Float64 = 100.0
-  per_unit::Bool = false
-
   mutable struct NetworkHandle
     handle::LibPowsybl.JavaHandle
     id::String
@@ -19,7 +16,15 @@ module Network
     source_format::String
     forecast_distance::Int32
     case_date::Float64
+    # Whether element data is read in per-unit, and the apparent power in MVA it is
+    # relative to. Both are settable: `network.per_unit = true`.
+    per_unit::Bool
+    nominal_apparent_power::Float64
   end
+
+  # A network reads in physical units against a 100 MVA base until told otherwise.
+  NetworkHandle(handle, id, name, source_format, forecast_distance, case_date) =
+    NetworkHandle(handle, id, name, source_format, forecast_distance, case_date, false, 100.0)
 
   function get_network_metadata(network::NetworkHandle)
       return LibPowsybl.get_network_metadata(network.handle)
@@ -52,9 +57,10 @@ module Network
     if all_attributes && !isempty(attributes)
       throw("parameters \"all_attributes\" and \"attributes\" are mutually exclusive")
     end
-    series_array = LibPowsybl.create_network_elements_series_array(network.handle, type, StdVector{StdString}(attributes), filter_attributes, per_unit, nominal_apparent_power)
+    series_array = LibPowsybl.create_network_elements_series_array(network.handle, type, StdVector{StdString}(attributes), filter_attributes, network.per_unit, network.nominal_apparent_power)
     return create_dataframe_from_series_array(series_array[])
   end
+
 
   function get_buses(network::NetworkHandle, all_attributes::Bool = false, attributes::Vector{String} = Vector{String}())
     return get_elements(network, LibPowsybl.BUS, all_attributes, attributes)

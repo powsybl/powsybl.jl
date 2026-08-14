@@ -278,6 +278,172 @@ module SensitivityAnalysis
   end
 
   """
+  A GLSK-like zone: a named, weighted set of injections (generators or loads). Once
+  registered on a context with [`set_zones`](@ref), a zone's `id` can be used as a
+  variable id in [`add_factor_matrix`](@ref) to compute the sensitivity of a monitored
+  quantity to a shift distributed over the zone's injections according to their keys.
+  """
+  struct Zone
+    id::String
+    shift_keys_by_injections_ids::Dict{String, Float64}
+  end
+
+  """
+      Zone(id, shift_keys_by_injections_ids::AbstractDict) -> Zone
+
+  Build a [`Zone`](@ref) from a mapping of injection id to shift key.
+  """
+  Zone(id::AbstractString) = Zone(String(id), Dict{String, Float64}())
+
+  Zone(id::AbstractString, shift_keys_by_injections_ids::AbstractDict) =
+    Zone(String(id), Dict{String, Float64}(String(injection) => Float64(key)
+                                           for (injection, key) in shift_keys_by_injections_ids))
+
+  """
+      injections_ids(zone) -> Vector{String}
+
+  The ids of the injections making up the zone. A zone is a set, so the order carries no
+  meaning.
+  """
+  injections_ids(zone::Zone) = collect(keys(zone.shift_keys_by_injections_ids))
+
+  """
+      get_shift_key(zone, injection_id) -> Float64
+
+  The shift key the zone gives `injection_id`. Raises if the zone does not hold it.
+  """
+  function get_shift_key(zone::Zone, injection_id::AbstractString)
+    key = get(zone.shift_keys_by_injections_ids, String(injection_id), nothing)
+    key === nothing &&
+      throw(ArgumentError("injection \"$injection_id\" is not in zone \"$(zone.id)\""))
+    return key
+  end
+
+  """
+      add_injection(zone, injection_id, key = 1.0)
+
+  Add an injection to the zone, or change the key of one already in it.
+  """
+  function add_injection(zone::Zone, injection_id::AbstractString, key::Real = 1.0)
+    zone.shift_keys_by_injections_ids[String(injection_id)] = Float64(key)
+    return nothing
+  end
+
+  """
+      remove_injection(zone, injection_id)
+
+  Remove an injection from the zone. Raises if the zone does not hold it.
+  """
+  function remove_injection(zone::Zone, injection_id::AbstractString)
+    get_shift_key(zone, injection_id)
+    delete!(zone.shift_keys_by_injections_ids, String(injection_id))
+    return nothing
+  end
+
+  """
+      move_injection_to(zone, other_zone, injection_id)
+
+  Move an injection from `zone` to `other_zone`, keeping its shift key. Raises if `zone`
+  does not hold it.
+  """
+  function move_injection_to(zone::Zone, other_zone::Zone, injection_id::AbstractString)
+    add_injection(other_zone, injection_id, get_shift_key(zone, injection_id))
+    remove_injection(zone, injection_id)
+    return nothing
+  end
+
+  """
+  Which quantity a country zone takes its shift keys from.
+  """
+  @enum ZoneKeyType begin
+    GENERATOR_TARGET_P = 0
+    GENERATOR_MAX_P = 1
+    LOAD_P0 = 2
+  end
+
+  """
+      create_empty_zone(id) -> Zone
+
+  Build a [`Zone`](@ref) with no injections yet.
+  """
+  create_empty_zone(id::AbstractString) = Zone(id)
+
+  # Country of each voltage level, by way of the substation it belongs to.
+  function _country_by_voltage_level(network::Network.NetworkHandle)
+    substations = Network.get_substations(network)
+    country_by_substation = Dict(String(row.id) => String(row.country) for row in eachrow(substations))
+    return Dict(String(row.id) => get(country_by_substation, String(row.substation_id), "")
+                for row in eachrow(Network.get_voltage_levels(network)))
+  end
+
+  """
+      create_country_zone(network, country, key_type = GENERATOR_TARGET_P) -> Zone
+
+  Build a [`Zone`](@ref) holding every injection of `network` located in `country`, weighted
+  by the quantity `key_type` names: a generator's `target_p` or `max_p`, or a load's `p0`.
+  """
+  function create_country_zone(network::Network.NetworkHandle, country::AbstractString,
+                               key_type::ZoneKeyType = GENERATOR_TARGET_P)
+    if key_type == GENERATOR_TARGET_P || key_type == GENERATOR_MAX_P
+      injections = Network.get_generators(network)
+      key_column = key_type == GENERATOR_TARGET_P ? "target_p" : "max_p"
+    elseif key_type == LOAD_P0
+      injections = Network.get_loads(network)
+      key_column = "p0"
+    else
+      throw(ArgumentError("unknown zone key type $key_type"))
+    end
+
+    country_of = _country_by_voltage_level(network)
+    shift_keys_by_injections_ids = Dict{String, Float64}()
+    for row in eachrow(injections)
+      get(country_of, String(row.voltage_level_id), "") == country || continue
+      shift_keys_by_injections_ids[String(row.id)] = Float64(row[key_column])
+    end
+    return Zone(String(country), shift_keys_by_injections_ids)
+  end
+
+  """
+      create_zone_from_injections_and_shift_keys(id, injection_ids, shift_keys) -> Zone
+
+  Build a [`Zone`](@ref) from a vector of injection ids and their matching shift keys.
+  """
+  function create_zone_from_injections_and_shift_keys(id::AbstractString, injection_ids::Vector{String},
+                                                      shift_keys::Vector{<:Real})
+    length(injection_ids) == length(shift_keys) ||
+      throw(ArgumentError("injection_ids and shift_keys must have the same length"))
+    return Zone(String(id), Dict{String, Float64}(zip(injection_ids, Float64.(shift_keys))))
+  end
+
+  """
+      set_zones(analysis, zones)
+
+  Register the given [`Zone`](@ref)s on the analysis context. Their ids then become
+  usable as variable ids in [`add_factor_matrix`](@ref).
+  """
+  function set_zones(analysis::SensitivityAnalysisContext, zones::Vector{Zone})
+    zone_ids = String[]
+    injection_ids = String[]
+    shift_keys = Float64[]
+    zone_lengths = Int32[]
+    for zone in zones
+      push!(zone_ids, zone.id)
+      push!(zone_lengths, Int32(length(zone.shift_keys_by_injections_ids)))
+      for (injection_id, key) in zone.shift_keys_by_injections_ids
+        push!(injection_ids, injection_id)
+        push!(shift_keys, key)
+      end
+    end
+    LibPowsybl.set_zones(analysis.handle,
+                         StdVector{StdString}(zone_ids),
+                         StdVector{StdString}(injection_ids),
+                         StdVector{Float64}(shift_keys),
+                         StdVector{Cint}(zone_lengths))
+    return nothing
+  end
+
+
+  """
       add_branch_flow_factor_matrix(analysis, branch_ids, variable_ids; matrix_id = "default")
 
   Register a branch active power (side 1) factor matrix, evaluated on the base case and on

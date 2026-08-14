@@ -350,3 +350,136 @@ end
   @test nrow(Powsybl.SensitivityAnalysis.get_reference_matrix(ac_result)) == 1
   @test !isempty(string(ac_report))
 end
+
+@testset "Test sensitivity analysis zones" begin
+  SEN = Powsybl.SensitivityAnalysis
+  network = Powsybl.Network.create_ieee9()
+  generators = Powsybl.Network.get_generators(network)[:, "id"]
+  branches = ["L7-8-0", "L9-8-0", "L7-5-0"]
+
+  # Zones can be built from injections and their shift keys, or from a mapping
+  z1 = SEN.create_zone_from_injections_and_shift_keys("zone1", [generators[1], generators[2]], [1.0, 2.0])
+  @test z1.id == "zone1"
+  @test z1.shift_keys_by_injections_ids == Dict(generators[1] => 1.0, generators[2] => 2.0)
+
+  z2 = SEN.Zone("zone2", Dict(generators[3] => 1.0))
+  @test z2.shift_keys_by_injections_ids == Dict(generators[3] => 1.0)
+
+  # Mismatched injections and keys are rejected rather than silently truncated
+  @test_throws ArgumentError SEN.create_zone_from_injections_and_shift_keys("bad", ["a", "b"], [1.0])
+
+  # Registered zone ids are usable as variable ids in a factor matrix
+  analysis = SEN.create_dc_analysis()
+  SEN.set_zones(analysis, [z1, z2])
+  SEN.add_factor_matrix(analysis, branches, ["zone1", "zone2"])
+
+  result = SEN.run(analysis, network)
+  sensitivities = SEN.get_sensitivity_matrix(result)
+  # One row per zone, labelled by its id, and one column per monitored branch
+  @test names(sensitivities) == ["id"; branches]
+  @test sensitivities[:, "id"] == ["zone1", "zone2"]
+  # A zone distributes the shift over its injections, so its sensitivities are finite
+  @test all(isfinite, Matrix(sensitivities[:, branches]))
+  # The two zones shift different generators, so they do not move the branches alike
+  @test sensitivities[1, branches[1]] != sensitivities[2, branches[1]]
+end
+
+@testset "Test country zones" begin
+  SEN = Powsybl.SensitivityAnalysis
+  N = Powsybl.Network
+  network = N.create_eurostag_tutorial_example1()
+
+  # An empty zone carries an id and nothing else, however it is spelled
+  @test SEN.create_empty_zone("empty").id == "empty"
+  @test isempty(SEN.create_empty_zone("empty").shift_keys_by_injections_ids)
+  @test isempty(SEN.Zone("empty").shift_keys_by_injections_ids)
+
+  # The key type names the quantity the zone is weighted by
+  @test Int(SEN.GENERATOR_TARGET_P) == 0
+  @test Int(SEN.GENERATOR_MAX_P) == 1
+  @test Int(SEN.LOAD_P0) == 2
+
+  # A country zone holds the injections of that country, weighted by the chosen quantity
+  generators = N.get_generators(network)
+  french = SEN.create_country_zone(network, "FR")
+  @test !isempty(french.shift_keys_by_injections_ids)
+  for (id, key) in french.shift_keys_by_injections_ids
+    @test key == generators[findfirst(==(id), generators[:, "id"]), "target_p"]
+  end
+
+  # ... and the quantity really is what changes: max_p gives the same injections, other keys
+  by_max_p = SEN.create_country_zone(network, "FR", SEN.GENERATOR_MAX_P)
+  @test keys(by_max_p.shift_keys_by_injections_ids) == keys(french.shift_keys_by_injections_ids)
+  @test by_max_p.shift_keys_by_injections_ids != french.shift_keys_by_injections_ids
+  for (id, key) in by_max_p.shift_keys_by_injections_ids
+    @test key == generators[findfirst(==(id), generators[:, "id"]), "max_p"]
+  end
+
+  # Loads are selected instead when the key type asks for them, and they sit in the other
+  # country of this network, so the two zones do not overlap
+  loads = N.get_loads(network)
+  belgian_loads = SEN.create_country_zone(network, "BE", SEN.LOAD_P0)
+  @test !isempty(belgian_loads.shift_keys_by_injections_ids)
+  for (id, key) in belgian_loads.shift_keys_by_injections_ids
+    @test key == loads[findfirst(==(id), loads[:, "id"]), "p0"]
+  end
+  @test isempty(intersect(keys(belgian_loads.shift_keys_by_injections_ids),
+                          keys(french.shift_keys_by_injections_ids)))
+
+  # A country the network does not contain gives an empty zone rather than an error
+  @test isempty(SEN.create_country_zone(network, "ZZ").shift_keys_by_injections_ids)
+
+  # A country zone is usable where any other zone is
+  analysis = SEN.create_dc_analysis()
+  SEN.set_zones(analysis, [french])
+  SEN.add_factor_matrix(analysis, ["NHV1_NHV2_1"], ["FR"])
+  sensitivities = SEN.get_sensitivity_matrix(SEN.run(analysis, network))
+  @test sensitivities[:, "id"] == ["FR"]
+  @test all(isfinite, Matrix(sensitivities[:, ["NHV1_NHV2_1"]]))
+end
+
+@testset "Test zone accessors and mutation" begin
+  SEN = Powsybl.SensitivityAnalysis
+
+  zone = SEN.create_zone_from_injections_and_shift_keys("z", ["a", "b"], [1.5, 2.5])
+  @test sort(SEN.injections_ids(zone)) == ["a", "b"]
+  @test SEN.get_shift_key(zone, "a") == 1.5
+  @test_throws ArgumentError SEN.get_shift_key(zone, "nope")
+
+  # Adding takes a key, or defaults it to one
+  SEN.add_injection(zone, "c", 3.0)
+  @test SEN.get_shift_key(zone, "c") == 3.0
+  SEN.add_injection(zone, "d")
+  @test SEN.get_shift_key(zone, "d") == 1.0
+
+  # Adding an injection already there changes its key rather than duplicating it
+  SEN.add_injection(zone, "a", 9.0)
+  @test SEN.get_shift_key(zone, "a") == 9.0
+  @test length(SEN.injections_ids(zone)) == 4
+
+  # Removing takes it out, and removing what is not there is an error rather than a no-op
+  SEN.remove_injection(zone, "d")
+  @test sort(SEN.injections_ids(zone)) == ["a", "b", "c"]
+  @test_throws ArgumentError SEN.remove_injection(zone, "d")
+
+  # Moving carries the key across and leaves the source without it
+  other = SEN.create_empty_zone("other")
+  SEN.move_injection_to(zone, other, "c")
+  @test SEN.get_shift_key(other, "c") == 3.0
+  @test sort(SEN.injections_ids(zone)) == ["a", "b"]
+  @test_throws ArgumentError SEN.get_shift_key(zone, "c")
+  @test_throws ArgumentError SEN.move_injection_to(zone, other, "c")
+
+  # A zone built up after construction is usable like any other
+  network = Powsybl.Network.create_eurostag_tutorial_example1()
+  built = SEN.create_empty_zone("built")
+  for generator in Powsybl.Network.get_generators(network)[:, "id"]
+    SEN.add_injection(built, generator)
+  end
+  analysis = SEN.create_dc_analysis()
+  SEN.set_zones(analysis, [built])
+  SEN.add_factor_matrix(analysis, ["NHV1_NHV2_1"], ["built"])
+  sensitivities = SEN.get_sensitivity_matrix(SEN.run(analysis, network))
+  @test sensitivities[:, "id"] == ["built"]
+  @test all(isfinite, Matrix(sensitivities[:, ["NHV1_NHV2_1"]]))
+end

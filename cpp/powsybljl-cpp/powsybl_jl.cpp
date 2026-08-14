@@ -430,6 +430,30 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
                 return *parameters;
     }, "Get a SensitivityAnalysisParameters filled with the provider defaults");
 
+  // Define GLSK-like zones (weighted sets of injections) usable as variable ids in a
+  // factor matrix. The zones are described by flattened parallel arrays so only basic
+  // vectors cross the CxxWrap boundary: zoneIds[z] owns zoneLengths[z] consecutive
+  // entries of injectionIds / shiftKeys.
+  mod.method("set_zones", [] (pypowsybl::JavaHandle analysisContext,
+                              std::vector<std::string> const& zoneIds,
+                              std::vector<std::string> const& injectionIds,
+                              std::vector<double> const& shiftKeys,
+                              std::vector<int> const& zoneLengths) {
+            std::vector<::zone*> zones;
+            zones.reserve(zoneIds.size());
+            int offset = 0;
+            for (size_t z = 0; z < zoneIds.size(); ++z) {
+              int len = zoneLengths[z];
+              std::vector<std::string> injs(injectionIds.begin() + offset, injectionIds.begin() + offset + len);
+              std::vector<double> keys(shiftKeys.begin() + offset, shiftKeys.begin() + offset + len);
+              zones.push_back(pypowsybl::createZone(zoneIds[z], injs, keys));
+              offset += len;
+            }
+            pypowsybl::setZones(analysisContext, zones);
+            // powsybl-cpp exposes no zone destructor; setZones copies the data into the
+            // Java context, so the transient structs are left for process teardown.
+    }, "Set the GLSK-like zones of a sensitivity analysis context");
+
   // runSensitivityAnalysis takes no dc argument, the mode travels in the load flow
   // parameters, as it does for runLoadFlow.
   mod.method("run_sensitivity_analysis", [] (pypowsybl::JavaHandle analysisContext, pypowsybl::JavaHandle network,

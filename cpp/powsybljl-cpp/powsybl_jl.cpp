@@ -317,4 +317,162 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.method("create_loadflow_provider_parameters_series_array", [] (const std::string& provider) {
             return pypowsybl::createLoadFlowProviderParametersSeriesArray(provider);
     }, "Create a parameters series array for a given loadflow provider");
+
+
+  // Single line diagram (SLD) and network area diagram (NAD)
+
+  // Default diagram parameters are built inside each wrapper and the optional
+  // per-element override dataframes are left null, so no parameter/dataframe type
+  // needs to be marshalled from Julia.
+
+  // Diagram parameters. Both native classes are built by their factory, which fills them
+  // with the engine's defaults; neither has a default constructor to fall back on.
+  mod.add_bits<pypowsybl::NadLayoutType>("NadLayoutType", jlcxx::julia_type("CppEnum"));
+  mod.set_const("NAD_LAYOUT_FORCE_LAYOUT", pypowsybl::NadLayoutType::FORCE_LAYOUT);
+  mod.set_const("NAD_LAYOUT_GEOGRAPHICAL", pypowsybl::NadLayoutType::GEOGRAPHICAL);
+
+  mod.add_bits<pypowsybl::EdgeInfoType>("EdgeInfoType", jlcxx::julia_type("CppEnum"));
+  mod.set_const("EDGE_INFO_ACTIVE_POWER", pypowsybl::EdgeInfoType::ACTIVE_POWER);
+  mod.set_const("EDGE_INFO_REACTIVE_POWER", pypowsybl::EdgeInfoType::REACTIVE_POWER);
+  mod.set_const("EDGE_INFO_CURRENT", pypowsybl::EdgeInfoType::CURRENT);
+  mod.set_const("EDGE_INFO_NAME", pypowsybl::EdgeInfoType::NAME);
+  mod.set_const("EDGE_INFO_VALUE_PERMANENT_LIMIT_PERCENTAGE", pypowsybl::EdgeInfoType::VALUE_PERMANENT_LIMIT_PERCENTAGE);
+  mod.set_const("EDGE_INFO_EMPTY", pypowsybl::EdgeInfoType::EMPTY);
+
+  CustomMapper<pypowsybl::SldParameters> sldParametersMapper(mod, "SldParameters");
+  sldParametersMapper
+    .method_readwrite("use_name", &pypowsybl::SldParameters::use_name)
+    .method_readwrite("center_name", &pypowsybl::SldParameters::center_name)
+    .method_readwrite("diagonal_label", &pypowsybl::SldParameters::diagonal_label)
+    .method_readwrite("nodes_infos", &pypowsybl::SldParameters::nodes_infos)
+    .method_readwrite("tooltip_enabled", &pypowsybl::SldParameters::tooltip_enabled)
+    .method_readwrite("topological_coloring", &pypowsybl::SldParameters::topological_coloring)
+    .method_readwrite("component_library", &pypowsybl::SldParameters::component_library)
+    .method_readwrite("display_current_feeder_info", &pypowsybl::SldParameters::display_current_feeder_info)
+    .method_readwrite("active_power_unit", &pypowsybl::SldParameters::active_power_unit)
+    .method_readwrite("reactive_power_unit", &pypowsybl::SldParameters::reactive_power_unit)
+    .method_readwrite("current_unit", &pypowsybl::SldParameters::current_unit);
+
+  mod.method("default_sld_parameters", [] () {
+            std::shared_ptr<pypowsybl::SldParameters> parameters(pypowsybl::createSldParameters());
+            return *parameters;
+    }, "Get SldParameters filled with the engine defaults");
+
+  CustomMapper<pypowsybl::NadParameters> nadParametersMapper(mod, "NadParameters");
+  nadParametersMapper
+    .method_readwrite("edge_info_along_edge", &pypowsybl::NadParameters::edge_info_along_edge)
+    .method_readwrite("id_displayed", &pypowsybl::NadParameters::id_displayed)
+    .method_readwrite("power_value_precision", &pypowsybl::NadParameters::power_value_precision)
+    .method_readwrite("current_value_precision", &pypowsybl::NadParameters::current_value_precision)
+    .method_readwrite("angle_value_precision", &pypowsybl::NadParameters::angle_value_precision)
+    .method_readwrite("voltage_value_precision", &pypowsybl::NadParameters::voltage_value_precision)
+    .method_readwrite("bus_legend", &pypowsybl::NadParameters::bus_legend)
+    .method_readwrite("substation_description_displayed", &pypowsybl::NadParameters::substation_description_displayed)
+    .method_readwrite("layout_type", &pypowsybl::NadParameters::layout_type)
+    .method_readwrite("scaling_factor", &pypowsybl::NadParameters::scaling_factor)
+    .method_readwrite("radius_factor", &pypowsybl::NadParameters::radius_factor)
+    .method_readwrite("voltage_level_details", &pypowsybl::NadParameters::voltage_level_details)
+    .method_readwrite("injections_added", &pypowsybl::NadParameters::injections_added)
+    .method_readwrite("info_side_external", &pypowsybl::NadParameters::info_side_external)
+    .method_readwrite("info_middle_side1", &pypowsybl::NadParameters::info_middle_side1)
+    .method_readwrite("info_middle_side2", &pypowsybl::NadParameters::info_middle_side2)
+    .method_readwrite("info_side_internal", &pypowsybl::NadParameters::info_side_internal)
+    .method_readwrite("scale_factor", &pypowsybl::NadParameters::scale_factor)
+    .method_readwrite("timeout_seconds", &pypowsybl::NadParameters::timeout_seconds)
+    .method_readwrite("edge_info_included", &pypowsybl::NadParameters::edge_info_included)
+    .method_readwrite("voltage_level_legends_included", &pypowsybl::NadParameters::voltage_level_legends_included);
+
+  mod.method("default_nad_parameters", [] () {
+            std::shared_ptr<pypowsybl::NadParameters> parameters(pypowsybl::createNadParameters());
+            return *parameters;
+    }, "Get NadParameters filled with the engine defaults");
+
+  mod.method("get_single_line_diagram_svg_and_metadata", [] (pypowsybl::JavaHandle network, std::string const& containerId,
+                                                             const pypowsybl::SldParameters& parameters) {
+            return pypowsybl::getSingleLineDiagramSvgAndMetadata(network, containerId, parameters, nullptr, nullptr, nullptr);
+    }, "Get the single line diagram of a voltage level or substation, with its metadata");
+
+  mod.method("write_single_line_diagram_svg", [] (pypowsybl::JavaHandle network, std::string const& containerId,
+                                                  std::string const& svgFile, std::string const& metadataFile,
+                                                  const pypowsybl::SldParameters& parameters) {
+            pypowsybl::writeSingleLineDiagramSvg(network, containerId, svgFile, metadataFile, parameters, nullptr, nullptr, nullptr);
+    }, "Write the single line diagram of a voltage level or substation to an SVG file");
+
+  // A matrix of substations is described by its ids and the length of each row, so only
+  // basic vectors cross the boundary; the wrapper rebuilds the rows.
+  static const auto to_matrix = [] (std::vector<std::string> const& ids, std::vector<int> const& rowLengths) {
+      std::vector<std::vector<std::string>> matrix;
+      matrix.reserve(rowLengths.size());
+      int offset = 0;
+      for (int length : rowLengths) {
+          matrix.emplace_back(ids.begin() + offset, ids.begin() + offset + length);
+          offset += length;
+      }
+      return matrix;
+  };
+
+  mod.method("get_matrix_multi_substation_svg_and_metadata", [] (pypowsybl::JavaHandle network,
+                                                                 std::vector<std::string> const& ids,
+                                                                 std::vector<int> const& rowLengths,
+                                                                 const pypowsybl::SldParameters& parameters) {
+            return pypowsybl::getMatrixMultiSubstationSvgAndMetadata(network, to_matrix(ids, rowLengths),
+                                                                     parameters, nullptr, nullptr, nullptr);
+    }, "Get a multi-substation single line diagram laid out as a matrix, with its metadata");
+
+  mod.method("write_matrix_multi_substation_single_line_diagram_svg", [] (pypowsybl::JavaHandle network,
+                                                                          std::vector<std::string> const& ids,
+                                                                          std::vector<int> const& rowLengths,
+                                                                          std::string const& svgFile,
+                                                                          std::string const& metadataFile,
+                                                                          const pypowsybl::SldParameters& parameters) {
+            pypowsybl::writeMatrixMultiSubstationSingleLineDiagramSvg(network, to_matrix(ids, rowLengths), svgFile,
+                                                                      metadataFile, parameters, nullptr, nullptr, nullptr);
+    }, "Write a multi-substation single line diagram laid out as a matrix to an SVG file");
+
+  mod.method("get_default_branch_labels_nad", [] (pypowsybl::JavaHandle network) {
+            return pypowsybl::getNetworkAreaDiagramDefaultBranchLabels(network);
+    }, "Get the default network area diagram branch labels");
+
+  mod.method("get_default_twt_labels_nad", [] (pypowsybl::JavaHandle network) {
+            return pypowsybl::getNetworkAreaDiagramDefaultTwtLabels(network);
+    }, "Get the default network area diagram three winding transformer labels");
+
+  mod.method("get_default_injections_labels_nad", [] (pypowsybl::JavaHandle network) {
+            return pypowsybl::getNetworkAreaDiagramDefaultInjectionsLabels(network);
+    }, "Get the default network area diagram injection labels");
+
+  mod.method("get_default_bus_descriptions_nad", [] (pypowsybl::JavaHandle network) {
+            return pypowsybl::getNetworkAreaDiagramDefaultBusDescriptions(network);
+    }, "Get the default network area diagram bus descriptions");
+
+  mod.method("get_default_voltage_level_descriptions_nad", [] (pypowsybl::JavaHandle network) {
+            return pypowsybl::getNetworkAreaDiagramDefaultVoltageLevelDescriptions(network);
+    }, "Get the default network area diagram voltage level descriptions");
+
+  mod.method("get_single_line_diagram_component_library_names", [] () {
+            return pypowsybl::getSingleLineDiagramComponentLibraryNames();
+    }, "Get the names of the available single line diagram component libraries");
+
+  mod.method("get_network_area_diagram_svg_and_metadata", [] (pypowsybl::JavaHandle network, std::vector<std::string> const& voltageLevelIds,
+                                                              int depth, double highNominalVoltageBound, double lowNominalVoltageBound,
+                                                              const pypowsybl::NadParameters& parameters) {
+            return pypowsybl::getNetworkAreaDiagramSvgAndMetadata(network, voltageLevelIds, depth,
+                                                                  highNominalVoltageBound, lowNominalVoltageBound, parameters,
+                                                                  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                                                  nullptr, nullptr, nullptr);
+    }, "Get the network area diagram, with its metadata");
+
+  mod.method("write_network_area_diagram_svg", [] (pypowsybl::JavaHandle network, std::string const& svgFile, std::string const& metadataFile,
+                                                   std::vector<std::string> const& voltageLevelIds, int depth,
+                                                   double highNominalVoltageBound, double lowNominalVoltageBound,
+                                                   const pypowsybl::NadParameters& parameters) {
+            pypowsybl::writeNetworkAreaDiagramSvg(network, svgFile, metadataFile, voltageLevelIds, depth,
+                                                  highNominalVoltageBound, lowNominalVoltageBound, parameters,
+                                                  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+    }, "Write the network area diagram to an SVG file");
+
+  mod.method("get_network_area_diagram_displayed_voltage_levels", [] (pypowsybl::JavaHandle network,
+                                                                      std::vector<std::string> const& voltageLevelIds, int depth) {
+            return pypowsybl::getNetworkAreaDiagramDisplayedVoltageLevels(network, voltageLevelIds, depth);
+    }, "Get the voltage levels displayed in a network area diagram for the given filter");
 }

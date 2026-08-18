@@ -109,3 +109,148 @@ end
   result = Powsybl.LoadFlow.run_dc(network, parameters)
   @test size(result.component_results, 1) == 1
 end
+
+@testset "Test single line diagram" begin
+  network = Powsybl.Network.create_ieee9()
+  vl_id = Powsybl.Network.get_voltage_levels(network)[1, "id"]
+
+  diagram = Powsybl.Diagram.get_single_line_diagram(network, vl_id)
+  @test occursin("<svg", diagram.svg)
+  # The metadata comes back with the diagram rather than only through a file
+  @test diagram.metadata !== nothing
+  @test occursin(vl_id, diagram.metadata)
+  # Printing gives the SVG, and it renders where image/svg+xml is displayed
+  @test string(diagram) == diagram.svg
+  @test sprint(show, MIME"image/svg+xml"(), diagram) == diagram.svg
+
+  @test !isempty(Powsybl.Diagram.get_single_line_diagram_component_library_names())
+
+  svg_file = tempname() * ".svg"
+  Powsybl.Diagram.write_single_line_diagram_svg(network, vl_id, svg_file)
+  @test isfile(svg_file)
+  @test filesize(svg_file) > 0
+end
+
+@testset "Test network area diagram" begin
+  network = Powsybl.Network.create_ieee9()
+  vl_id = Powsybl.Network.get_voltage_levels(network)[1, "id"]
+
+  diagram = Powsybl.Diagram.get_network_area_diagram(network; voltage_level_ids = [vl_id], depth = 1)
+  @test occursin("<svg", diagram.svg)
+  @test diagram.metadata !== nothing
+  @test string(diagram) == diagram.svg
+
+  displayed = Powsybl.Diagram.get_network_area_diagram_displayed_voltage_levels(network, [vl_id], 1)
+  @test displayed isa Vector{String}
+  @test vl_id in displayed
+
+  svg_file = tempname() * ".svg"
+  Powsybl.Diagram.write_network_area_diagram(network, svg_file)
+  @test isfile(svg_file)
+  @test filesize(svg_file) > 0
+end
+
+@testset "Test diagram parameters" begin
+  D = Powsybl.Diagram
+  network = Powsybl.Network.create_eurostag_tutorial_example1()
+  container = Powsybl.Network.get_voltage_levels(network)[1, "id"]
+
+  # Defaults match the engine's, so asking for them explicitly changes nothing
+  plain = D.get_single_line_diagram(network, container)
+  @test D.get_single_line_diagram(network, container; parameters = D.SldParameters()).svg == plain.svg
+
+  # The component library the accessor reports can now actually be asked for
+  libraries = D.get_single_line_diagram_component_library_names()
+  @test length(libraries) > 1
+  other = D.get_single_line_diagram(network, container;
+                                    parameters = D.SldParameters(component_library = libraries[2]))
+  @test other.svg != plain.svg
+
+  # ... and so can the rest of the single line diagram parameters
+  named = D.get_single_line_diagram(network, container;
+                                    parameters = D.SldParameters(use_name = true, center_name = true))
+  @test named.svg != plain.svg
+
+  # The same for the network area diagram, including the edge labels
+  nad = D.get_network_area_diagram(network)
+  @test D.get_network_area_diagram(network; parameters = D.NadParameters()).svg == nad.svg
+  @test D.get_network_area_diagram(network;
+                                   parameters = D.NadParameters(id_displayed = true,
+                                                                bus_legend = false)).svg != nad.svg
+  @test D.get_network_area_diagram(network;
+                                   parameters = D.NadParameters(
+                                     edge_info_parameters =
+                                       D.EdgeInfoParameters(info_side_external = D.CURRENT))).svg != nad.svg
+
+  # The enums take their values from the binding rather than repeating them
+  @test Int(D.FORCE_LAYOUT) == Int(Powsybl.LibPowsybl.NAD_LAYOUT_FORCE_LAYOUT)
+  @test Int(D.GEOGRAPHICAL) == Int(Powsybl.LibPowsybl.NAD_LAYOUT_GEOGRAPHICAL)
+  @test Int(D.ACTIVE_POWER) == Int(Powsybl.LibPowsybl.EDGE_INFO_ACTIVE_POWER)
+  @test Int(D.EMPTY) == Int(Powsybl.LibPowsybl.EDGE_INFO_EMPTY)
+
+  # Writers take them too
+  svg_file = tempname() * ".svg"
+  D.write_single_line_diagram_svg(network, container, svg_file;
+                                  parameters = D.SldParameters(component_library = libraries[2]))
+  @test filesize(svg_file) > 0
+  nad_file = tempname() * ".svg"
+  D.write_network_area_diagram(network, nad_file; parameters = D.NadParameters(id_displayed = true))
+  @test filesize(nad_file) > 0
+end
+
+@testset "Test multi-substation diagram and default NAD profile" begin
+  D = Powsybl.Diagram
+  network = Powsybl.Network.create_eurostag_tutorial_example1()
+  substations = Powsybl.Network.get_substations(network)[:, "id"]
+  @test length(substations) >= 2
+
+  # A matrix of substations gives one diagram holding all of them
+  matrix = D.get_matrix_multi_substation_single_line_diagram(network, [[substations[1]], [substations[2]]])
+  @test occursin("<svg", matrix.svg)
+  @test matrix.metadata !== nothing
+  # ... which is not the same drawing as either substation on its own
+  @test matrix.svg != D.get_single_line_diagram(network, substations[1]).svg
+  # The layout is read from the matrix, so a row of two differs from two rows of one
+  side_by_side = D.get_matrix_multi_substation_single_line_diagram(network, [[substations[1], substations[2]]])
+  @test side_by_side.svg != matrix.svg
+
+  svg_file = tempname() * ".svg"
+  D.write_matrix_multi_substation_single_line_diagram_svg(network, [[substations[1], substations[2]]], svg_file)
+  @test filesize(svg_file) > 0
+
+  # The default profile fills in the tables the engine can describe by itself
+  profile = D.get_default_nad_profile(network)
+  @test names(profile.branch_labels)[1] == "id"
+  @test size(profile.branch_labels, 1) == size(Powsybl.Network.get_lines(network), 1) +
+                                          size(Powsybl.Network.get_2_windings_transformers(network), 1)
+  @test size(profile.bus_descriptions, 1) > 0
+  @test size(profile.vl_descriptions, 1) == size(Powsybl.Network.get_voltage_levels(network), 1)
+  @test profile.three_wt_labels !== nothing
+  # The style tables are not something the engine describes, so they stay unset
+  @test profile.bus_node_styles === nothing
+  @test profile.edge_styles === nothing
+  @test profile.three_wt_styles === nothing
+end
+
+@testset "Test a single voltage level id needs no vector" begin
+  D = Powsybl.Diagram
+  network = Powsybl.Network.create_ieee9()
+  vl_id = Powsybl.Network.get_voltage_levels(network)[1, "id"]
+
+  # Every call taking a list of voltage levels takes one id on its own too, meaning the same
+  @test D.get_network_area_diagram(network; voltage_level_ids = vl_id, depth = 1).svg ==
+        D.get_network_area_diagram(network; voltage_level_ids = [vl_id], depth = 1).svg
+  @test D.get_network_area_diagram_displayed_voltage_levels(network, vl_id, 1) ==
+        D.get_network_area_diagram_displayed_voltage_levels(network, [vl_id], 1)
+
+  single = tempname() * ".svg"
+  as_vector = tempname() * ".svg"
+  D.write_network_area_diagram(network, single; voltage_level_ids = vl_id, depth = 1)
+  D.write_network_area_diagram(network, as_vector; voltage_level_ids = [vl_id], depth = 1)
+  @test read(single, String) == read(as_vector, String)
+
+  # A row of the substation matrix takes one id on its own as well
+  substation = Powsybl.Network.get_substations(network)[1, "id"]
+  @test D.get_matrix_multi_substation_single_line_diagram(network, [substation]).svg ==
+        D.get_matrix_multi_substation_single_line_diagram(network, [[substation]]).svg
+end

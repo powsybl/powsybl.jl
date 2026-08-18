@@ -8,4 +8,5 @@ module Powsybl
   include("LibPowsybl.jl")
   include("Network.jl")
   include("LoadFlow.jl")
+  include("Diagram.jl")
 end

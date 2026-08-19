@@ -317,4 +317,32 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.method("create_loadflow_provider_parameters_series_array", [] (const std::string& provider) {
             return pypowsybl::createLoadFlowProviderParametersSeriesArray(provider);
     }, "Create a parameters series array for a given loadflow provider");
+
+  // ---------------------------------------------------------------------------
+  // GLSK (Generation and Load Shift Keys) document
+  // ---------------------------------------------------------------------------
+
+  mod.method("create_glsk_document", [] (std::string filename) {
+            return pypowsybl::createGLSKdocument(filename);
+    }, "Load a GLSK document from a file");
+
+  mod.method("get_glsk_countries", [] (const pypowsybl::JavaHandle& importer) {
+            return pypowsybl::getGLSKcountries(importer);
+    }, "Get the zones (countries) defined in a GLSK document");
+
+  mod.method("get_glsk_injection_keys", [] (pypowsybl::JavaHandle network, const pypowsybl::JavaHandle& importer, std::string country, long instant) {
+            return pypowsybl::getGLSKinjectionkeys(network, importer, country, instant);
+    }, "Get the injection ids participating for a zone at a given instant");
+
+  mod.method("get_glsk_factors", [] (pypowsybl::JavaHandle network, const pypowsybl::JavaHandle& importer, std::string country, long instant) {
+            return pypowsybl::getGLSKInjectionFactors(network, importer, country, instant);
+    }, "Get the shift-key factors for a zone at a given instant");
+
+  mod.method("get_glsk_factors_start_timestamp", [] (const pypowsybl::JavaHandle& importer) {
+            return pypowsybl::getInjectionFactorStartTimestamp(importer);
+    }, "Get the start of a GLSK document validity interval (epoch seconds)");
+
+  mod.method("get_glsk_factors_end_timestamp", [] (const pypowsybl::JavaHandle& importer) {
+            return pypowsybl::getInjectionFactorEndTimestamp(importer);
+    }, "Get the end of a GLSK document validity interval (epoch seconds)");
 }

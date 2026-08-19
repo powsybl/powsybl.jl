@@ -132,3 +132,20 @@ end
   @test imported.name == "simple-eu"
   @test !isempty(string(import_report_node))
 end
+
+@testset "Test the shared contingency context type" begin
+  C = Powsybl.Contingency
+
+  # The four states a computation can be asked to report on
+  @test Set(instances(C.ContingencyContextType)) ==
+        Set([C.ALL, C.NONE, C.SPECIFIC, C.ONLY_CONTINGENCIES])
+
+  # Values come from the binding rather than being repeated here
+  @test Int(C.ALL) == Int(Powsybl.LibPowsybl.CONTINGENCY_CONTEXT_ALL)
+  @test Int(C.NONE) == Int(Powsybl.LibPowsybl.CONTINGENCY_CONTEXT_NONE)
+  @test Int(C.SPECIFIC) == Int(Powsybl.LibPowsybl.CONTINGENCY_CONTEXT_SPECIFIC)
+  @test Int(C.ONLY_CONTINGENCIES) == Int(Powsybl.LibPowsybl.CONTINGENCY_CONTEXT_ONLY_CONTINGENCIES)
+
+  # ... and convert back to what the engine expects
+  @test C.raw(C.SPECIFIC) == Powsybl.LibPowsybl.CONTINGENCY_CONTEXT_SPECIFIC
+end

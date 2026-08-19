@@ -138,6 +138,12 @@ JLCXX_MODULE define_module_powsybl(jlcxx::Module& mod)
   mod.set_const("DEFAULT_ATTRIBUTES", filter_attributes_type::DEFAULT_ATTRIBUTES);
   mod.set_const("SELECTION_ATTRIBUTES", filter_attributes_type::SELECTION_ATTRIBUTES);
 
+  mod.add_bits<contingency_context_type>("ContingencyContextTypeRaw", jlcxx::julia_type("CppEnum"));
+  mod.set_const("CONTINGENCY_CONTEXT_ALL", contingency_context_type::ALL);
+  mod.set_const("CONTINGENCY_CONTEXT_NONE", contingency_context_type::NONE);
+  mod.set_const("CONTINGENCY_CONTEXT_SPECIFIC", contingency_context_type::SPECIFIC);
+  mod.set_const("CONTINGENCY_CONTEXT_ONLY_CONTINGENCIES", contingency_context_type::ONLY_CONTINGENCIES);
+
   auto preJavaCall = [](pypowsybl::GraalVmGuard* guard, exception_handler* exc){ };
   auto postJavaCall = [](){ };
   pypowsybl::init(preJavaCall, postJavaCall);

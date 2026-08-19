@@ -342,3 +342,70 @@ julia> network2 = Powsybl.Network.load("case.xiidm"; report_node = report_node)
 julia> print(report_node)
 julia> Powsybl.Report.to_json(report_node)
 ```
+
+### Sensitivity analysis module
+
+A sensitivity analysis computes how monitored quantities (typically branch flows) react
+to variations of chosen variables (typically injections) — for instance PTDF matrices.
+It is driven through the `SensitivityAnalysis` submodule.
+
+```julia
+julia> using Powsybl
+
+julia> network = Powsybl.Network.create_ieee9()
+julia> generators = Powsybl.Network.get_generators(network)[:, "id"]
+julia> branches = ["L7-8-0", "L9-8-0", "L7-5-0"]
+
+# Register a branch-flow factor matrix (sensitivities of branch flows w.r.t. injections)
+julia> analysis = Powsybl.SensitivityAnalysis.create_dc_analysis()
+julia> Powsybl.SensitivityAnalysis.add_branch_flow_factor_matrix(analysis, branches, generators)
+
+# The context decides the mode, so run takes no ac/dc of its own
+julia> result = Powsybl.SensitivityAnalysis.run(analysis, network)
+
+# The sensitivity matrix and the reference (base-case) function values, as DataFrames
+# whose first column names the row and whose other columns are the monitored functions
+julia> Powsybl.SensitivityAnalysis.get_sensitivity_matrix(result)
+julia> Powsybl.SensitivityAnalysis.get_reference_matrix(result)
+```
+
+`create_ac_analysis` gives a context that runs in AC and additionally accepts
+`add_bus_voltage_factor_matrix`, bus voltage sensitivities existing only in AC.
+`get_sensitivity_values` and `get_reference_values` return the same numbers unlabelled.
+
+For finer control, `add_factor_matrix` takes the function/variable element ids plus a
+`sensitivity_function_type` (e.g. `BRANCH_ACTIVE_POWER_1`, `BRANCH_CURRENT_1`,
+`BUS_VOLTAGE`), a `sensitivity_variable_type` (e.g. `AUTO_DETECT`,
+`INJECTION_ACTIVE_POWER`, `TRANSFORMER_PHASE`, `BUS_TARGET_VOLTAGE`) and, optionally,
+contingencies. Post-contingency sensitivities are obtained by declaring contingencies
+(`add_single_element_contingency`, `add_multiple_elements_contingency`,
+`add_single_element_contingencies` or `add_contingencies_from_json_file`) and passing the
+contingency id to `get_sensitivity_matrix`.
+
+`add_branch_flow_factor_matrix` evaluates its matrix on the base case and on every
+contingency; `add_precontingency_branch_flow_factor_matrix` restricts it to the base case
+and `add_postcontingency_branch_flow_factor_matrix` to a given list of contingencies. Each
+matrix is registered under a `matrix_id` and retrieved with it.
+
+A variable may also be a pair of zone ids rather than a single id, standing for a transfer
+between the two zones. It comes back as one row named `"zone1 -> zone2"`, holding the
+sensitivity of the first zone minus that of the second.
+
+`run` accepts the sensitivity analysis parameters, or simply the load flow parameters to
+use, and a `report_node` collecting the functional logs of the run:
+
+```julia
+julia> parameters = Powsybl.SensitivityAnalysis.Parameters()
+julia> parameters.flow_flow_sensitivity_value_threshold = 0.01
+julia> parameters.provider_parameters["someProviderParameter"] = "value"
+
+julia> report_node = Powsybl.Report.ReportNode()
+julia> result = Powsybl.SensitivityAnalysis.run(analysis, network, parameters; report_node = report_node)
+```
+
+Besides the load flow parameters, `Parameters` carries the four thresholds below which a
+computed sensitivity value is discarded (`flow_flow_`, `voltage_voltage_`, `flow_voltage_`
+and `angle_flow_sensitivity_value_threshold`) and the parameters of the provider, whose
+accepted keys are listed by `get_provider_parameters_names`. The available providers are
+given by `get_provider_names`, and the one used when `run` is given none is read from
+`get_default_provider` and changed with `set_default_provider`.
